@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { LIMITS, MESSAGES, setInputSchema } from './sets'
+import { LIMITS, MESSAGES } from './constants'
+import { setInputSchema } from './sets'
 
 const valid = {
   title: '  Capitales  ',

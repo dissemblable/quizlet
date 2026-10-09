@@ -21,9 +21,10 @@ Mémo pour les futures sessions sur ce dépôt. L'interface et la documentation 
 - Style Biome : apostrophes simples, pas de point-virgule, virgules finales, 100 colonnes.
   Lancer `pnpm format` avant de committer.
 - Commits en français, style conventionnel (`feat(scope): …`, `chore: …`).
-- Les versions des outils sont récentes (TypeScript 7, Vite 8, Vitest 5, React Router 8,
-  Turborepo 2.11) : en cas de doute, lire la doc embarquée dans `node_modules/<paquet>/docs`
-  ou les `.d.ts` plutôt que de se fier à sa mémoire.
+- Les versions des outils sont récentes (TypeScript 7, Vite 8 avec Rolldown, Vitest 5, React
+  Router 8, Turborepo 2.11, Zod 4) : en cas de doute, lire la doc embarquée dans
+  `node_modules/<paquet>/docs` ou les `.d.ts` plutôt que de se fier à sa mémoire.
+- `turbo.json` a `agentGuidance: false` : turbo ne régénère pas d'`AGENTS.md`, ce fichier-ci fait foi.
 
 ## Commandes
 
@@ -57,6 +58,18 @@ pnpm build
   Ne pas réintroduire `next-themes` ni de script inline.
 - Logique pure dans `src/lib/*.ts`, testée avec Vitest (environnement node). Titres de page avec
   `<title>{pageTitle('…')}</title>` (React 19).
+- Tests de rendu : en-tête `// @vitest-environment jsdom`, puis `installDomStubs()`, `mockApi()`
+  et `renderApp(path)` (`src/test/dom.tsx`), avec les fixtures de `src/test/fixtures.ts`.
+- Routes dans `src/router.tsx`. Les pages hors bibliothèque sont en `lazy` ; ne pas importer
+  statiquement une page lazy depuis le bundle principal.
+- Dans le front, importer depuis `@quizlet/shared` ce qui est nécessaire : les constantes vivent dans
+  `constants.ts` (sans Zod) et le package est `sideEffects: false`, donc Zod ne part que dans les
+  chunks qui l'utilisent.
+- Composants shadcn/ui (base Radix, preset vega) : `pnpm dlx shadcn@latest add <nom>` depuis
+  `apps/web` (option `-o` si un fichier existe déjà), puis `pnpm format`. Tailwind 4 : préférer les
+  classes canoniques (`wrap-break-word` plutôt que `break-words`).
+- Accessibilité : focus visible, labels, `aria-live` pour les retours (flashcards, quiz), focus
+  déplacé au changement de page (`AppLayout`) et en fin de session.
 
 ## Règles de sécurité (SSO)
 

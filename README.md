@@ -1,9 +1,25 @@
 # Quizlet
 
-Application de flashcards auto-hébergée, inspirée de Quizlet, qui tourne derrière le SSO Authelia existant.
-Elle n'a pas de comptes propres : l'identité vient du reverse proxy.
+Application de flashcards auto-hébergée, inspirée de Quizlet, qui tourne derrière le SSO Authelia
+existant. Elle n'a ni inscription ni mot de passe : l'identité vient du reverse proxy (nginx +
+Authelia, en forward-auth).
 
-> Ce README est complété à chaque étape du projet.
+## Fonctionnalités (V1)
+
+- **Identité SSO** : nom et email venus d'Authelia, affichés dans l'en-tête, avec déconnexion vers
+  le portail Authelia.
+- **Sets de cartes** : titre, description facultative, visibilité privée ou publique. Un éditeur
+  sur une seule page permet d'ajouter, modifier, supprimer et réordonner les cartes.
+- **Bibliothèque** : mes sets, leur nombre de cartes, recherche par titre.
+- **Flashcards** : carte qui se retourne, précédent/suivant, mélange, raccourcis clavier, barre de
+  progression, « Je sais » / « À revoir » et récapitulatif de fin.
+- **Quiz** : questions à choix multiples générées à partir des cartes (la bonne définition et trois
+  distracteurs), puis score final et erreurs à revoir.
+- **Sets publics** : consultables et étudiables via leur lien par tout utilisateur authentifié,
+  duplicables dans sa propre bibliothèque. Seul leur auteur peut les modifier.
+
+Interface en français, responsive (pensée d'abord pour le mobile), thème clair ou sombre, et
+navigation au clavier.
 
 ## Prérequis
 
@@ -22,17 +38,33 @@ pnpm dev                    # front sur http://localhost:5180, API sur http://12
 ```
 
 Aucun fichier d'environnement n'est à copier : les valeurs de développement (sans secret) sont
-versionnées dans `apps/api/.env.development`.
+versionnées dans `apps/api/.env.development`. En local, l'authentification est factice : vous êtes
+l'utilisateur `demo` (« Utilisateur Démo »), le même que celui créé par `pnpm db:seed`.
 
 ## Structure du monorepo
 
 ```
 apps/
-  api/        API Hono (Node, @hono/node-server), Drizzle ORM, migrations dans drizzle/
-  web/        Front Vite + React + Tailwind CSS + shadcn/ui
+  api/                      API Hono (Node, @hono/node-server)
+    drizzle/                migrations SQL versionnées (générées par drizzle-kit)
+    src/app.ts              assemblage des middlewares et routes, export du type AppType
+    src/env.ts              configuration validée par Zod (refus de démarrer si invalide)
+    src/middleware/         identité SSO, proxys de confiance, garde CSRF
+    src/routes/             /api/me, /api/sets (CRUD, duplication, quiz)
+    src/services/           accès aux données et contrôles de propriété
+    src/domain/             logique pure : permissions, génération du quiz
+    src/db/                 schéma Drizzle, client, migrations, seed
+    Dockerfile
+  web/                      Front Vite + React 19 + React Router + TanStack Query
+    src/pages/              bibliothèque, set, éditeur, flashcards, quiz
+    src/components/         mise en page, composants métier, ui/ (shadcn/ui)
+    src/lib/                client API, requêtes, logique pure (sessions, formulaires), thème
+    nginx.conf, Dockerfile  image statique de production
 packages/
-  shared/     Schémas Zod et utilitaires partagés entre le front et l'API
-docker/       Script d'initialisation du Postgres de dev
+  shared/                   schémas Zod, limites, messages, utilitaires (mélange, quiz)
+docker/                     initialisation du Postgres de dev
+docker-compose.yml          Postgres de dev (local uniquement)
+docker-compose.prod.yml     production derrière Authelia
 ```
 
 - **pnpm workspaces** et **Turborepo** orchestrent `dev`, `build`, `lint`, `typecheck` et `test`.
@@ -347,3 +379,39 @@ en production.
 - Bibliothèque : la recherche porte sur le titre, sans tenir compte de la casse (`ILIKE`, jokers
   `%` et `_` échappés), mais en tenant compte des accents. La bibliothèque ne liste que ses propres
   sets : un set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.
+- Front : les pages autres que la bibliothèque sont chargées à la demande, et le socle React
+  (react, react-dom, react-router, TanStack Query) forme un chunk à part, qui reste en cache d'un
+  déploiement à l'autre. Les constantes partagées vivent dans un module sans Zod, pour ne pas
+  embarquer Zod dans le chargement initial.
+- Thème clair/sombre : préférence mémorisée dans le navigateur (clair, sombre ou système). Elle est
+  appliquée avant le premier rendu par `public/theme-init.js`, un script externe et non inline,
+  pour respecter la CSP `script-src 'self'`.
+- Une session Authelia expirée en cours d'édition affiche une bannière « Se reconnecter ». La
+  saisie n'est pas sauvegardée automatiquement : la bannière invite à la copier avant de recharger.
+
+## Tests
+
+```bash
+docker compose up -d db   # l'API est testée contre une vraie base PostgreSQL (quizlet_test)
+pnpm test
+```
+
+| Package | Ce qui est testé |
+|---|---|
+| `apps/api` | Middleware d'identité : proxy de confiance ou non, en-têtes forgés, `X-Forwarded-For` ignoré, UTF-8, mode dev. Configuration : refus du mode dev en production, variables obligatoires. Upsert et cache des utilisateurs. Permissions sur les sets (lecture, écriture, suppression, duplication, carte d'un autre set). Recherche (jokers échappés). Génération du quiz (graine déterministe, distracteurs distincts, minimum de cartes). Garde CSRF, en-têtes de sécurité, CORS |
+| `apps/web` | Logique pure : session de flashcards (progression, marquage, mélange), score du quiz, formulaire d'édition, client HTTP (session expirée), raccourcis clavier. Tests de rendu (jsdom) des parcours : bibliothèque, création et édition, page d'un set, flashcards, quiz |
+| `packages/shared` | Mélange de Fisher-Yates, générateur pseudo-aléatoire, schémas Zod, normalisation des réponses |
+
+## Dépannage
+
+- **`pnpm test` échoue avec « Postgres de test injoignable »** : lancer `docker compose up -d db`.
+- **Le port 5433 ou 5180 est déjà pris** : changer le port dans `docker-compose.yml` (et
+  `DATABASE_URL` dans `apps/api/.env`), ou dans `apps/web/vite.config.ts` (et `APP_ORIGIN`).
+- **« Requête refusée : … n'est pas un proxy de confiance »** dans les logs de l'API : la requête
+  ne vient pas du nginx du stack. Vérifier `TRUSTED_PROXIES` et que le conteneur s'appelle bien
+  `nginx` sur le réseau `web`.
+- **401 sur toutes les routes en production** : nginx ne transmet pas `Remote-User`. Vérifier que
+  chaque `location` du vhost inclut `authelia-authrequest.conf`.
+- **« Session expirée » en boucle** : vérifier la session Authelia sur `auth.valldoy.com`. Une
+  boucle de redirection peut aussi venir d'un `$scheme` au lieu de `$real_scheme` dans les snippets
+  du stack (§12 de la documentation du stack).

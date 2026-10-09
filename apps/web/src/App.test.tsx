@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { demoMe, installDomStubs, mockApi, renderApp } from '@/test/dom'
 
@@ -31,6 +32,15 @@ describe('App', () => {
     expect(await screen.findByText('Impossible de charger votre profil')).toBeTruthy()
     expect(screen.getByText('Service indisponible.')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Réessayer/ })).toBeTruthy()
+  })
+
+  it('place le focus sur le contenu principal après un changement de page', async () => {
+    mockApi({ 'GET /api/me': { body: demoMe }, 'GET /api/sets': { body: { sets: [] } } })
+    const user = userEvent.setup()
+    await renderApp()
+    await user.click(await screen.findByRole('link', { name: 'Créer un set' }))
+    expect(await screen.findByRole('heading', { name: 'Nouveau set' })).toBeTruthy()
+    expect(document.activeElement?.id).toBe('contenu')
   })
 
   it('affiche une page introuvable pour une adresse inconnue', async () => {

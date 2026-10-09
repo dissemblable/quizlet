@@ -15,6 +15,23 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Le socle React (chargé dès le départ) dans son propre chunk : il change rarement et
+        // reste en cache d'un déploiement à l'autre. Zod, react-hook-form, etc. restent dans
+        // les chunks des pages chargées à la demande.
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|@tanstack[\\/][^\\/]+)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   server: { port: 5180, strictPort: true, proxy: apiProxy },
   preview: { port: 5180, strictPort: true, proxy: apiProxy },
   test: {

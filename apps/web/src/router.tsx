@@ -1,24 +1,43 @@
 import { createBrowserRouter } from 'react-router'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { FlashcardsPage } from '@/pages/FlashcardsPage'
+import { LoadingState } from '@/components/states'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { QuizPage } from '@/pages/QuizPage'
 import { RouteErrorPage } from '@/pages/RouteErrorPage'
-import { EditSetPage, NewSetPage } from '@/pages/SetEditorPage'
-import { SetPage } from '@/pages/SetPage'
 
+// La bibliothèque (page d'accueil) est incluse dans le bundle principal ; les autres pages sont
+// chargées à la demande pour alléger le premier chargement.
 export const router = createBrowserRouter([
   {
     Component: AppLayout,
     ErrorBoundary: RouteErrorPage,
+    HydrateFallback: () => (
+      <main className="mx-auto w-full max-w-5xl px-4 py-10">
+        <LoadingState />
+      </main>
+    ),
     children: [
       { index: true, Component: LibraryPage },
-      { path: 'sets/new', Component: NewSetPage },
-      { path: 'sets/:id', Component: SetPage },
-      { path: 'sets/:id/edit', Component: EditSetPage },
-      { path: 'sets/:id/flashcards', Component: FlashcardsPage },
-      { path: 'sets/:id/quiz', Component: QuizPage },
+      {
+        path: 'sets/new',
+        lazy: async () => ({ Component: (await import('@/pages/SetEditorPage')).NewSetPage }),
+      },
+      {
+        path: 'sets/:id',
+        lazy: async () => ({ Component: (await import('@/pages/SetPage')).SetPage }),
+      },
+      {
+        path: 'sets/:id/edit',
+        lazy: async () => ({ Component: (await import('@/pages/SetEditorPage')).EditSetPage }),
+      },
+      {
+        path: 'sets/:id/flashcards',
+        lazy: async () => ({ Component: (await import('@/pages/FlashcardsPage')).FlashcardsPage }),
+      },
+      {
+        path: 'sets/:id/quiz',
+        lazy: async () => ({ Component: (await import('@/pages/QuizPage')).QuizPage }),
+      },
       { path: '*', Component: NotFoundPage },
     ],
   },
