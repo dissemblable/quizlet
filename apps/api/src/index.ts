@@ -12,7 +12,15 @@ if (config.migrateOnStart) {
   console.log('Migrations appliquées')
 }
 
-const app = createApp()
+const app = createApp({ db, config })
+
+if (config.devIdentity) {
+  console.warn(
+    `⚠ Authentification de développement : toutes les requêtes sont « ${config.devIdentity.username} ».`,
+  )
+} else {
+  console.log(`Proxys de confiance : ${config.trustedProxies.join(', ') || 'aucun'}`)
+}
 
 const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`API à l'écoute sur http://${info.address}:${info.port} (${config.nodeEnv})`)

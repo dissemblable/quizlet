@@ -1,11 +1,13 @@
+import { sql } from 'drizzle-orm'
 import { index, integer, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
+// Horodatages toujours produits par l'horloge de Postgres (jamais celle de l'app).
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow()
-    .$onUpdate(() => new Date()),
+    .$onUpdate(() => sql`now()`),
 }
 
 export const visibilityEnum = pgEnum('visibility', ['private', 'public'])

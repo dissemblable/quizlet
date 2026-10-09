@@ -47,7 +47,28 @@ pnpm build
 - Config : `src/env.ts` (Zod). `NODE_ENV` vaut `production` par défaut. En dev, les scripts pnpm
   préchargent `load-dev-env.mjs`, qui lit `.env` puis `.env.development`.
 
+## Front
+
+- Appels d'API : `api` (`src/lib/api.ts`) + `unwrap()` (`src/lib/http.ts`), qui lève une `ApiError`
+  avec un message français. Clés et hooks TanStack Query dans `src/lib/queries.ts`.
+- `apiFetch` utilise `redirect: 'manual'` : une session Authelia expirée (302) devient
+  `SESSION_EXPIRED` → bannière « Se reconnecter » (`src/lib/session.ts`).
+- Thème : `src/lib/theme.tsx` + `public/theme-init.js` (script externe, compatible CSP).
+  Ne pas réintroduire `next-themes` ni de script inline.
+- Logique pure dans `src/lib/*.ts`, testée avec Vitest (environnement node). Titres de page avec
+  `<title>{pageTitle('…')}</title>` (React 19).
+
 ## Règles de sécurité (SSO)
 
 - Ne **jamais** versionner `sso-*.md` (documentation d'infrastructure, ignorée par git et Docker),
   ni aucun secret ou identifiant réel. Les exemples utilisent `demo`, `alice` et `bob`.
+- Les en-têtes `Remote-*` ne valent que si le **pair TCP** est un proxy de confiance
+  (`src/middleware/trusted-proxies.ts`). Ne jamais se fier à `X-Forwarded-For` / `X-Real-IP`.
+- Toute nouvelle route passe après le middleware `identity` (dans `src/app.ts`). Seul `/api/health`
+  est enregistré avant.
+- Le mode `DEV_AUTH_*` doit rester impossible en production : `NODE_ENV` vaut `production` par
+  défaut, `parseConfig` refuse `DEV_AUTH_*` dans ce cas, et le Dockerfile fige `NODE_ENV=production`.
+- La garde CSRF (`src/middleware/csrf.ts`) est indispensable : le cookie Authelia est partagé par
+  tous les sous-domaines. CORS est fermé par défaut.
+- Production : aucune section `ports:` dans `docker-compose.prod.yml`. L'API n'est joignable que
+  via le réseau Docker `web` (par nginx) ; Postgres seulement via un réseau `internal`.

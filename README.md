@@ -86,10 +86,70 @@ Elles sont validées par Zod au démarrage. Une variable vide (`FOO=`) est consi
 | `DATABASE_URL` | requis | URL `postgres://…` |
 | `MIGRATE_ON_START` | `false` | Applique les migrations au démarrage |
 | `MIGRATIONS_DIR` | `./drizzle` | Dossier des migrations SQL |
+| `TRUSTED_PROXIES` | requis en prod (`127.0.0.1,::1` sinon) | IP, CIDR ou noms d'hôte autorisés à transmettre `Remote-*` |
+| `APP_ORIGIN` | requis en prod (`http://localhost:5180` sinon) | Origine publique de l'app, pour le contrôle CSRF |
+| `AUTH_LOGOUT_URL` | requis en prod | URL de déconnexion d'Authelia |
+| `CORS_ORIGINS` | vide | Origines autorisées en CORS (aucune par défaut) |
+| `DEV_AUTH_USER` | – | Active l'identité factice de dev. **Interdit en production** |
+| `DEV_AUTH_NAME`, `DEV_AUTH_EMAIL`, `DEV_AUTH_GROUPS` | – | Détails de l'identité factice |
 | `TEST_DATABASE_URL` | `…/quizlet_test` | Base utilisée par les tests |
 
 En local, les scripts pnpm chargent `apps/api/.env.development` (versionné), puis `apps/api/.env`
-s'il existe (ignoré par git, pour tes surcharges). Les variables du shell priment toujours.
+s'il existe (ignoré par git, pour les surcharges locales). Les variables du shell priment toujours.
+
+## Authentification (SSO Authelia)
+
+L'application n'a ni inscription, ni mot de passe, ni page de connexion. En production :
+
+```
+Navigateur → Cloudflare → cloudflared → nginx ──auth_request──▶ Authelia
+                                          │ 200 : nginx ajoute Remote-User / Remote-Name /
+                                          │       Remote-Email / Remote-Groups
+                                          ▼
+                              quizlet-web (front) et quizlet-api (/api)
+```
+
+- À chaque requête, l'API vérifie d'abord que le **pair TCP** est un proxy de confiance
+  (`TRUSTED_PROXIES`). L'en-tête `X-Forwarded-For`, contrôlable par le client, n'est jamais
+  utilisé. Une requête venue d'ailleurs est refusée (403 `UNTRUSTED_PROXY`), même si elle porte des
+  en-têtes `Remote-*`.
+- `TRUSTED_PROXIES` accepte des IP, des CIDR et des **noms d'hôte**. Le nginx du stack SSO n'a pas
+  d'IP fixe sur le réseau Docker `web` (elle change à chaque recréation du conteneur) : en
+  production on utilise `TRUSTED_PROXIES=nginx`, résolu par le DNS Docker et mis en cache 30 s. Si
+  la résolution échoue, aucune adresse n'est acceptée (*fail-closed*).
+- `Remote-User` est l'identifiant stable. Sans lui (ou s'il est invalide), l'API répond 401.
+  L'utilisateur est créé à sa première requête, puis son email et son nom sont mis à jour s'ils
+  changent dans Authelia (*upsert*, avec un petit cache mémoire de 5 min). `Remote-Name` est décodé
+  en UTF-8, et `Remote-Groups` est lu mais n'est pas stocké.
+- Côté nginx, le vhost **écrase** ces en-têtes avec `proxy_set_header` : un client ne peut pas les
+  forger. L'API n'est jamais exposée directement (aucun `ports:` en production).
+- Le cookie Authelia (SameSite=Lax) est posé sur le domaine parent, donc il accompagne aussi les
+  requêtes venues d'un autre sous-domaine. L'API refuse toute méthode non sûre qui ne vient pas de
+  sa propre origine (`Sec-Fetch-Site`, avec repli sur `Origin` = `APP_ORIGIN`). Le CORS est
+  désactivé par défaut.
+- Quand la session Authelia expire, nginx répond aux appels d'API par un 302 vers le portail. Le
+  front ne suit pas cette redirection : il affiche « Session expirée » avec un bouton
+  « Se reconnecter », qui recharge la page et relance le parcours de connexion.
+- Le bouton « Se déconnecter » du menu utilisateur redirige vers `AUTH_LOGOUT_URL`, fournie par
+  `GET /api/me` : la changer ne demande pas de rebuild.
+
+### Mode de développement
+
+Authelia n'existe pas en local. `DEV_AUTH_USER` (par défaut `demo` dans `.env.development`) injecte
+une identité de test et ignore les en-têtes reçus. Ce mode est verrouillé :
+
+- l'API **refuse de démarrer** si une variable `DEV_AUTH_*` est définie avec `NODE_ENV=production`
+  (valeur par défaut de `NODE_ENV`, et valeur figée dans l'image Docker) ;
+- il exige une écoute en loopback (`HOST=127.0.0.1`, `::1` ou `localhost`).
+
+Pour tester le mode « en-têtes du proxy » en local, mettre `DEV_AUTH_USER=` (vide) dans
+`apps/api/.env`, puis :
+
+```bash
+curl -H "Remote-User: alice" -H "Remote-Name: Alice" http://127.0.0.1:3000/api/me   # 200
+```
+
+Hors production, `TRUSTED_PROXIES` vaut par défaut `127.0.0.1,::1`.
 
 ## Ports en local
 

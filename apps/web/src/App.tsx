@@ -1,21 +1,20 @@
-import { useEffect, useState } from 'react'
-import { api } from '@/lib/api'
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
+import { RouterProvider } from 'react-router/dom'
+import { Toaster } from '@/components/ui/sonner'
+import { createQueryClient } from '@/lib/query-client'
+import { ThemeProvider } from '@/lib/theme'
+import { router } from '@/router'
 
-export function App() {
-  const [status, setStatus] = useState<string>('…')
-
-  useEffect(() => {
-    api.api.health
-      .$get()
-      .then((res) => res.json())
-      .then((body) => setStatus(body.status))
-      .catch(() => setStatus('injoignable'))
-  }, [])
+export function App({ queryClient }: { queryClient?: QueryClient }) {
+  const [client] = useState(() => queryClient ?? createQueryClient())
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-semibold">Quizlet</h1>
-      <p className="mt-2 text-sm text-gray-500">API : {status}</p>
-    </main>
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+        <Toaster position="bottom-center" />
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }

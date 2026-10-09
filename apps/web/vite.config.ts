@@ -19,7 +19,7 @@ export default defineConfig({
   preview: { port: 5180, strictPort: true, proxy: apiProxy },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
-    passWithNoTests: true,
+    // Logique pure en environnement node ; les tests de rendu déclarent `@vitest-environment jsdom`.
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 })
