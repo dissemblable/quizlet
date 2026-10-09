@@ -1,6 +1,7 @@
 import { setIdParamSchema, setInputSchema, setsQuerySchema } from '@quizlet/shared'
 import { Hono } from 'hono'
 import type { Db } from '../db/client'
+import { getQuiz } from '../services/quiz'
 import { createSet, deleteSet, duplicateSet, getSet, listSets, updateSet } from '../services/sets'
 import type { AppEnv } from '../types'
 import { validate } from '../validation'
@@ -35,5 +36,9 @@ export function setsRoutes(db: Db) {
     .post('/:id/duplicate', validate('param', setIdParamSchema), async (c) => {
       const set = await duplicateSet(db, c.req.valid('param').id, c.get('user'))
       return c.json({ set }, 201)
+    })
+    .get('/:id/quiz', validate('param', setIdParamSchema), async (c) => {
+      const questions = await getQuiz(db, c.req.valid('param').id, c.get('user'))
+      return c.json({ questions })
     })
 }

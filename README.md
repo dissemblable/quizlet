@@ -89,6 +89,7 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction |
 | `DELETE /sets/:id` | Auteur seul |
 | `POST /sets/:id/duplicate` | Quiconque peut lire le set : crée une copie privée « … (copie) » |
+| `GET /sets/:id/quiz` | Quiconque peut lire le set : un QCM par carte (422 s'il a moins de 4 définitions différentes) |
 
 Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts` :
 
@@ -206,6 +207,12 @@ en production.
   mélange relance la session. Marquer une carte passe à la suivante. Raccourcis : Espace pour
   retourner la carte, ← et → pour naviguer (désactivés pendant une saisie ; sur un bouton, Espace
   active le bouton).
+- Quiz : généré par l'API, une question par carte et dans un ordre aléatoire. Chaque question
+  propose la bonne définition et trois distracteurs tirés des autres cartes. Les définitions
+  identiques à la casse et aux espaces près ne comptent qu'une fois, d'où le minimum de 4
+  définitions *différentes*. La réponse attendue (`answerIndex`) est envoyée avec les questions et
+  le score est calculé dans le navigateur : c'est un outil de révision personnelle, pas un examen.
+  Chaque « Nouveau quiz » demande un nouveau tirage. Raccourcis : touches 1 à 4.
 - Bibliothèque : la recherche porte sur le titre, sans tenir compte de la casse (`ILIKE`, jokers
   `%` et `_` échappés), mais en tenant compte des accents. La bibliothèque ne liste que ses propres
   sets : un set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.

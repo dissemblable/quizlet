@@ -1,4 +1,13 @@
-import { CopyIcon, LayersIcon, LinkIcon, Loader2Icon, PencilIcon, PlusIcon } from 'lucide-react'
+import { countDistinctDefinitions, QUIZ_MIN_CARDS } from '@quizlet/shared'
+import {
+  CopyIcon,
+  LayersIcon,
+  LinkIcon,
+  ListChecksIcon,
+  Loader2Icon,
+  PencilIcon,
+  PlusIcon,
+} from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { DeleteSetDialog } from '@/components/sets/DeleteSetDialog'
@@ -88,6 +97,17 @@ function SetOverview({ set }: { set: SetDetail }) {
           description="Retournez les cartes et notez celles à revoir."
           unavailableReason={
             set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
+          }
+        />
+        <StudyModeLink
+          to={`/sets/${set.id}/quiz`}
+          icon={<ListChecksIcon />}
+          title="Quiz"
+          description="Questions à choix multiples, avec un score final."
+          unavailableReason={
+            countDistinctDefinitions(set.cards) < QUIZ_MIN_CARDS
+              ? `Il faut au moins ${QUIZ_MIN_CARDS} cartes aux définitions différentes.`
+              : undefined
           }
         />
       </div>

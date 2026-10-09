@@ -13,6 +13,8 @@ export const queryKeys = {
   setLists: ['sets', 'list'] as const,
   setList: (search: string) => ['sets', 'list', search] as const,
   set: (id: string) => ['sets', 'detail', id] as const,
+  // Hors de ['sets', …] : aucune invalidation de set ne doit régénérer un quiz en cours.
+  quiz: (id: string, attempt: number) => ['quiz', id, attempt] as const,
 }
 
 /** Utilisateur courant (identité SSO) et URL de déconnexion. */
@@ -37,6 +39,16 @@ export function useSet(id: string) {
   return useQuery({
     queryKey: queryKeys.set(id),
     queryFn: async () => (await unwrap(api.sets[':id'].$get({ param: { id } }))).set,
+  })
+}
+
+/** Un nouveau tirage par tentative (`attempt`), jamais rafraîchi pendant qu'on y répond. */
+export function useQuiz(id: string, attempt: number) {
+  return useQuery({
+    queryKey: queryKeys.quiz(id, attempt),
+    queryFn: async () => (await unwrap(api.sets[':id'].quiz.$get({ param: { id } }))).questions,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
   })
 }
 

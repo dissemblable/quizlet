@@ -1,4 +1,5 @@
 export { type ApiErrorBody, ERROR_CODES, type ErrorCode, isApiErrorBody } from './api'
+export { countDistinctDefinitions, normalizeAnswer } from './quiz'
 export { type RandomFn, seededRandom, shuffle } from './random'
 export {
   type CardInput,
