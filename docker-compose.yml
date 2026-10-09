@@ -1,0 +1,26 @@
+# Développement local uniquement : ne jamais utiliser ce fichier sur le serveur
+# (la production utilise docker-compose.prod.yml, sans aucune section `ports:`).
+name: quizlet-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: quizlet
+      POSTGRES_PASSWORD: quizlet
+      POSTGRES_DB: quizlet
+    ports:
+      # Exposé sur la boucle locale seulement ; 5433 car 5432 est souvent déjà pris.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Crée la base de test `quizlet_test` au premier démarrage du volume.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quizlet -d quizlet"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

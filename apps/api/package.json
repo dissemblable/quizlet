@@ -9,20 +9,27 @@
     }
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --import ./load-dev-env.mjs src/index.ts",
     "build": "tsdown",
     "start": "node --enable-source-maps dist/index.mjs",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --import ./load-dev-env.mjs src/scripts/migrate.ts",
+    "db:seed": "tsx --import ./load-dev-env.mjs src/scripts/seed.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",
-    "hono": "^4.13.13"
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@quizlet/shared": "workspace:*",
     "@types/node": "^24.19.1",
+    "drizzle-kit": "^0.31.11",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  // dist/index.mjs (serveur) et dist/migrate.mjs (commande de migration manuelle).
+  entry: { index: 'src/index.ts', migrate: 'src/scripts/migrate.ts' },
   platform: 'node',
   target: 'node24',
   format: 'esm',

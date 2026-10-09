@@ -28,11 +28,24 @@ Mémo pour les futures sessions sur ce dépôt. L'interface et la documentation 
 ## Commandes
 
 ```bash
+docker compose up -d db        # Postgres de dev sur 127.0.0.1:5433 (requis pour les tests API)
 pnpm install
+pnpm db:migrate && pnpm db:seed
 pnpm dev                       # front :5180 + API :3000
 pnpm typecheck && pnpm lint && pnpm test   # à lancer avant chaque commit
 pnpm build
 ```
+
+## Base de données
+
+- Drizzle ORM avec `postgres` (postgres.js). Schéma dans `apps/api/src/db/schema.ts`.
+- Pour changer le schéma : modifier `schema.ts`, lancer `pnpm db:generate`, relire le SQL dans
+  `apps/api/drizzle/` et le committer. Ne jamais modifier une migration déjà committée.
+- Toutes les requêtes passent par Drizzle (jamais de SQL concaténé).
+- Tests d'API : vraie base `quizlet_test`. `useTestDb()` (`src/test/test-db.ts`) vide les tables
+  avant chaque test ; les fichiers s'exécutent en série (`fileParallelism: false`).
+- Config : `src/env.ts` (Zod). `NODE_ENV` vaut `production` par défaut. En dev, les scripts pnpm
+  préchargent `load-dev-env.mjs`, qui lit `.env` puis `.env.development`.
 
 ## Règles de sécurité (SSO)
 
