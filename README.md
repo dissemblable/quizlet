@@ -74,6 +74,34 @@ docker/       Script d'initialisation du Postgres de dev
 
 Les identifiants sont des UUID. Supprimer un utilisateur ou un set supprime ce qui en dépend.
 
+## API
+
+Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
+`{ "error": { "code": "NOT_FOUND", "message": "Set introuvable." } }`, avec des messages en français.
+
+| Route | Accès |
+|---|---|
+| `GET /health` | Sans identité (healthcheck Docker) |
+| `GET /me` | Utilisateur courant et `logoutUrl` |
+| `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées) |
+| `GET /sets/:id` | Auteur, ou n'importe quel utilisateur si le set est public |
+| `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction |
+| `DELETE /sets/:id` | Auteur seul |
+| `POST /sets/:id/duplicate` | Quiconque peut lire le set : crée une copie privée « … (copie) » |
+
+Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts` :
+
+- Un set privé est **introuvable (404)** pour tout autre utilisateur que son auteur. On répond 404
+  plutôt que 403 pour ne pas révéler qu'il existe.
+- Un set public est lisible et duplicable par tout utilisateur authentifié. Le modifier ou le
+  supprimer est **interdit (403)** à tout autre que son auteur.
+- `PUT` conserve l'identifiant des cartes qui appartiennent déjà au set. Un identifiant inconnu,
+  ou celui d'une carte d'un autre set, est ignoré : la carte est créée comme nouvelle. Une carte
+  d'un autre set n'est donc jamais modifiée.
+
+Choix simple : le CRUD des cartes passe par l'éditeur du set (une page, un enregistrement atomique)
+plutôt que par une route par carte. Cela réduit la surface où vérifier les permissions.
+
 ## Variables d'environnement (API)
 
 Elles sont validées par Zod au démarrage. Une variable vide (`FOO=`) est considérée comme absente.
@@ -168,3 +196,7 @@ en production.
   comportement de développement.
 - Le fichier `docker-compose.yml` sert uniquement au développement local. Il publie Postgres sur
   `127.0.0.1` seulement et ne doit jamais tourner sur le serveur.
+- Éditeur de set : les cartes se réordonnent avec des boutons ↑/↓ (accessibles au clavier) plutôt
+  que par glisser-déposer. Les lignes entièrement vides sont ignorées à l'enregistrement, et quitter
+  la page avec des modifications non enregistrées demande confirmation.
+- Un set dupliqué est toujours privé, quelle que soit la visibilité de l'original.

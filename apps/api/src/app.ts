@@ -10,6 +10,7 @@ import { csrfGuard } from './middleware/csrf'
 import { type ClientIpResolver, identity } from './middleware/identity'
 import { createTrustedProxyMatcher, type TrustedProxyMatcher } from './middleware/trusted-proxies'
 import { meRoutes } from './routes/me'
+import { setsRoutes } from './routes/sets'
 import { createUserResolver } from './services/users'
 import type { AppEnv } from './types'
 
@@ -65,6 +66,7 @@ export function createApp({ db, config, trustedProxies, clientIp }: AppDeps) {
         }),
       )
       .route('/me', meRoutes(config.logoutUrl))
+      .route('/sets', setsRoutes(db))
   )
 }
 

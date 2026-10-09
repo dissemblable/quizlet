@@ -1,4 +1,6 @@
+import { PlusIcon } from 'lucide-react'
 import { Link, NavLink } from 'react-router'
+import { Button } from '@/components/ui/button'
 import { APP_NAME } from '@/config'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
@@ -30,6 +32,12 @@ export function Header() {
           </NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-1">
+          <Button asChild size="sm" className="mr-1">
+            <Link to="/sets/new">
+              <PlusIcon />
+              <span className="sr-only sm:not-sr-only">Nouveau set</span>
+            </Link>
+          </Button>
           <ThemeToggle />
           <UserMenu />
         </div>

@@ -66,6 +66,12 @@ pnpm build
   (`src/middleware/trusted-proxies.ts`). Ne jamais se fier à `X-Forwarded-For` / `X-Real-IP`.
 - Toute nouvelle route passe après le middleware `identity` (dans `src/app.ts`). Seul `/api/health`
   est enregistré avant.
+- Accès aux sets : toujours passer par `assertAccess` / `decideAccess` (`src/domain/permissions.ts`,
+  `src/services/sets.ts`). Set invisible → 404 (jamais 403, pour ne pas révéler son existence) ;
+  set public d'un autre → lecture seule, 403 en écriture. Toute requête sur les cartes filtre par
+  `set_id`.
+- Validation des entrées avec `validate()` (`src/validation.ts`) et les schémas de
+  `@quizlet/shared` : mêmes règles que les formulaires du front.
 - Le mode `DEV_AUTH_*` doit rester impossible en production : `NODE_ENV` vaut `production` par
   défaut, `parseConfig` refuse `DEV_AUTH_*` dans ce cas, et le Dockerfile fige `NODE_ENV=production`.
 - La garde CSRF (`src/middleware/csrf.ts`) est indispensable : le cookie Authelia est partagé par

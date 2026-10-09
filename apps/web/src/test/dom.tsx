@@ -20,6 +20,16 @@ export function installDomStubs() {
       dispatchEvent: () => false,
     }) as MediaQueryList
 
+  // API absentes de jsdom mais utilisées par les primitives Radix (radio, dialogues, menus).
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Element.prototype.hasPointerCapture ??= () => false
+  Element.prototype.releasePointerCapture ??= () => {}
+  Element.prototype.scrollIntoView ??= () => {}
+
   afterEach(() => {
     cleanup()
     resetSessionExpired()
@@ -50,6 +60,15 @@ export function mockApi(routes: Record<string, MockReply>) {
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+/** Corps JSON envoyé lors du premier appel correspondant à « MÉTHODE /chemin ». */
+export function sentBody(fetchMock: ReturnType<typeof mockApi>, method: string, path: string) {
+  const call = fetchMock.mock.calls.find(([input, init]) => {
+    const url = new URL(String(input), window.location.href)
+    return (init?.method ?? 'GET') === method && url.pathname === path
+  })
+  return call?.[1]?.body ? JSON.parse(String(call[1].body)) : undefined
 }
 
 export const demoMe = {
