@@ -145,8 +145,9 @@ Navigateur → Cloudflare → cloudflared → nginx ──auth_request──▶ 
   en-têtes `Remote-*`.
 - `TRUSTED_PROXIES` accepte des IP, des CIDR et des **noms d'hôte**. Le nginx du stack SSO n'a pas
   d'IP fixe sur le réseau Docker `web` (elle change à chaque recréation du conteneur) : en
-  production on utilise `TRUSTED_PROXIES=nginx`, résolu par le DNS Docker et mis en cache 30 s. Si
-  la résolution échoue, aucune adresse n'est acceptée (*fail-closed*).
+  production on utilise `TRUSTED_PROXIES=nginx`, résolu par le DNS Docker et mis en cache 5 s
+  seulement : après recréation de nginx, son ancienne IP ne reste pas de confiance longtemps. Si la
+  résolution échoue, aucune adresse n'est acceptée (*fail-closed*).
 - `Remote-User` est l'identifiant stable. Sans lui (ou s'il est invalide), l'API répond 401.
   L'utilisateur est créé à sa première requête, puis son email et son nom sont mis à jour s'ils
   changent dans Authelia (*upsert*, avec un petit cache mémoire de 5 min). `Remote-Name` est décodé
@@ -180,6 +181,136 @@ curl -H "Remote-User: alice" -H "Remote-Name: Alice" http://127.0.0.1:3000/api/m
 ```
 
 Hors production, `TRUSTED_PROXIES` vaut par défaut `127.0.0.1,::1`.
+
+## Déploiement (serveur derrière Authelia)
+
+L'app s'ajoute au stack SSO existant comme n'importe quelle application (§11 de la documentation
+du stack) : des conteneurs sur le réseau Docker `web`, **sans `ports:`**, et un vhost nginx. Rien à
+changer côté Cloudflare (DNS wildcard et ingress attrape-tout) ni côté Authelia (la règle
+`*.valldoy.com` couvre déjà le sous-domaine).
+
+| Conteneur | Image | Réseaux | Rôle |
+|---|---|---|---|
+| `quizlet-web` | nginx sans privilèges, port 8080 | `web` | Front statique (SPA) |
+| `quizlet-api` | Node 24, port 3000 | `web`, `quizlet-internal` | API Hono |
+| `quizlet-db` | PostgreSQL 17, volume `quizlet-pgdata` | `quizlet-internal` (`internal: true`) | Base de données |
+
+L'API et le front tournent en lecture seule (`read_only`), sans capacités Linux et avec
+`no-new-privileges`. Les images de base sont multi-architectures : le build se fait nativement sur
+le serveur ARM64.
+
+### Installation
+
+```bash
+cd /opt/stack/apps
+git clone <dépôt> quizlet && cd quizlet
+cp .env.example .env && chmod 600 .env
+# Dans .env : POSTGRES_PASSWORD=$(openssl rand -hex 32), et vérifier APP_ORIGIN / AUTH_LOGOUT_URL
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml ps        # les trois services en « healthy »
+```
+
+Les migrations sont appliquées au démarrage de l'API (`MIGRATE_ON_START=true`). Pour les lancer
+à la main :
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm quizlet-api node dist/migrate.mjs
+```
+
+Mise à jour : `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
+
+### Vhost nginx (`/opt/stack/nginx/sites/quizlet.conf`)
+
+À créer à la main, sur le modèle de `whoami.conf`. Les snippets Authelia du stack sont inclus dans
+chaque `location` : leurs `proxy_set_header Remote-*` écrasent toute valeur envoyée par le client.
+
+```nginx
+server {
+    listen 80;
+    server_name quizlet.valldoy.com;
+
+    include /etc/nginx/snippets/authelia-location.conf;
+
+    # API : reçoit l'identité Authelia (Remote-User, Remote-Name, Remote-Email, Remote-Groups).
+    location /api/ {
+        include /etc/nginx/snippets/authelia-authrequest.conf;
+
+        set $upstream_quizlet_api http://quizlet-api:3000;
+        proxy_pass $upstream_quizlet_api;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    # Front statique, protégé lui aussi : un visiteur non connecté part vers le portail.
+    location / {
+        include /etc/nginx/snippets/authelia-authrequest.conf;
+
+        set $upstream_quizlet_web http://quizlet-web:8080;
+        proxy_pass $upstream_quizlet_web;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+}
+```
+
+```bash
+docker exec nginx nginx -t && docker exec nginx nginx -s reload
+```
+
+- `proxy_pass` en variable, comme dans le reste du stack : nginx démarre même si l'app est arrêtée.
+- L'API se fie au pair TCP (le conteneur `nginx`, cf. `TRUSTED_PROXIES=nginx`) et ignore
+  `X-Forwarded-For` : le `$proxy_add_x_forwarded_for` de `proxy.conf` ne pose pas de problème.
+- La limite de taille de nginx par défaut (`client_max_body_size 1m`) correspond à celle de l'API.
+
+### Règle Authelia (facultative)
+
+Aucune règle n'est nécessaire : `*.valldoy.com` en `two_factor` couvre déjà l'app. Pour la
+**réserver à un groupe**, ajouter deux règles **avant** la règle générale. Authelia applique la
+première règle dont tous les critères correspondent : sans la règle `deny`, un utilisateur hors du
+groupe retomberait sur la règle `*.valldoy.com` et serait admis.
+
+```yaml
+access_control:
+  default_policy: 'deny'
+  rules:
+    - domain: 'quizlet.valldoy.com'
+      policy: 'two_factor'
+      subject: 'group:users'
+    - domain: 'quizlet.valldoy.com'
+      policy: 'deny'
+    - domain: ['valldoy.com', '*.valldoy.com']
+      policy: 'two_factor'
+```
+
+### Validation
+
+| # | Test | Résultat attendu |
+|---|---|---|
+| 1 | `docker compose -f docker-compose.prod.yml ps` | trois services `healthy`, colonne PORTS sans publication sur l'hôte |
+| 2 | `curl -I https://quizlet.valldoy.com/` | 302 vers `https://auth.valldoy.com/?rd=…` |
+| 3 | Idem avec `-H 'Remote-User: admin'`, sur `/` et `/api/me` | toujours 302, jamais 200 |
+| 4 | Connexion dans le navigateur | la bibliothèque s'affiche, avec votre nom dans l'en-tête |
+| 5 | `docker run --rm --network web curlimages/curl -s -H 'Remote-User: admin' http://quizlet-api:3000/api/me` | 403 `UNTRUSTED_PROXY` : seul le conteneur `nginx` est cru |
+| 6 | `docker compose up -d --force-recreate --no-deps nginx` (dans `/opt/stack`), puis recharger l'app | l'app fonctionne toujours (la confiance suit l'IP du conteneur `nginx`) |
+| 7 | Menu utilisateur → « Se déconnecter » | redirection vers le portail Authelia, session fermée |
+
+Les tests 1, 5 et 6 ont été rejoués en local avec un nginx factice nommé `nginx`, qui injectait une
+identité (sans Authelia). Après recréation de ce nginx, un autre conteneur récupérait son ancienne
+IP : le nouveau nginx restait accepté, le conteneur qui avait récupéré l'ancienne IP était refusé.
+Le test 6 redémarre le nginx du stack, donc toutes les apps quelques secondes : il est facultatif.
+
+### Sauvegarde
+
+La base vit dans le volume `quizlet_quizlet-pgdata`. À ajouter à la sauvegarde hors VPS du stack :
+
+```bash
+docker exec quizlet-db pg_dump -U quizlet quizlet | gzip > quizlet-$(date +%F).sql.gz
+```
+
+### Piste : accès anonyme aux sets publics (hors V1)
+
+C'est faisable avec une règle Authelia `policy: 'bypass'` limitée par `resources` (par exemple
+`'^/api/public/'` et les routes du front), placée avant la règle générale. Il faudrait aussi
+servir sans identité les assets du front et ajouter côté API des routes publiques en lecture
+seule : sur ces chemins, nginx ne transmet plus de `Remote-User`.
 
 ## Ports en local
 

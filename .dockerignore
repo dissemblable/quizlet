@@ -1,0 +1,19 @@
+# Contexte de build Docker : uniquement les sources nécessaires.
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/*.log
+.git
+.github
+.vscode
+.idea
+
+# Secrets et configuration locale : jamais dans une image.
+**/.env
+**/.env.*
+!.env.example
+
+# Documentation d'infrastructure sensible.
+sso-*.md

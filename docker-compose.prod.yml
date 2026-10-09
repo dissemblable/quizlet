@@ -1,0 +1,82 @@
+# Production, sur le serveur, depuis /opt/stack/apps/quizlet :
+#   cp .env.example .env && chmod 600 .env   # puis renseigner les valeurs
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Règle absolue de l'infrastructure : AUCUNE section `ports:`. L'entrée passe exclusivement par
+# Cloudflare → cloudflared → nginx (auth_request Authelia), sur le réseau Docker externe `web`.
+name: quizlet
+
+x-defaults: &defaults
+  restart: unless-stopped
+  security_opt:
+    - "no-new-privileges:true"
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  quizlet-db:
+    <<: *defaults
+    image: postgres:17-alpine
+    container_name: quizlet-db
+    environment:
+      POSTGRES_DB: quizlet
+      POSTGRES_USER: quizlet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - quizlet-pgdata:/var/lib/postgresql/data
+    # Réseau interne uniquement : ni le stack SSO ni Internet ne peuvent joindre la base.
+    networks: [quizlet-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quizlet -d quizlet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  quizlet-api:
+    <<: *defaults
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: quizlet-api:latest
+    container_name: quizlet-api
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    environment:
+      # Mot de passe hexadécimal (openssl rand -hex 32) : utilisable tel quel dans l'URL.
+      DATABASE_URL: postgres://quizlet:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}@quizlet-db:5432/quizlet
+      APP_ORIGIN: ${APP_ORIGIN:?définir APP_ORIGIN dans .env}
+      AUTH_LOGOUT_URL: ${AUTH_LOGOUT_URL:?définir AUTH_LOGOUT_URL dans .env}
+      # Seul le conteneur nginx du stack SSO peut transmettre les en-têtes Remote-*.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-nginx}
+      MIGRATE_ON_START: "true"
+    depends_on:
+      quizlet-db:
+        condition: service_healthy
+    networks: [web, quizlet-internal]
+
+  quizlet-web:
+    <<: *defaults
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: quizlet-web:latest
+    container_name: quizlet-web
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    networks: [web]
+
+networks:
+  # Réseau du stack SSO (créé par `docker network create web`), partagé avec nginx.
+  web:
+    external: true
+  quizlet-internal:
+    internal: true
+
+volumes:
+  quizlet-pgdata:

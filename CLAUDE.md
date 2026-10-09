@@ -78,3 +78,15 @@ pnpm build
   tous les sous-domaines. CORS est fermé par défaut.
 - Production : aucune section `ports:` dans `docker-compose.prod.yml`. L'API n'est joignable que
   via le réseau Docker `web` (par nginx) ; Postgres seulement via un réseau `internal`.
+- Ne jamais modifier la configuration du stack SSO (Authelia, nginx, cloudflared) depuis ce dépôt :
+  le vhost et la règle Authelia ne sont fournis qu'en snippets dans le README.
+
+## Déploiement
+
+- `docker-compose.prod.yml` (projet `quizlet`) : `quizlet-web` (nginx sans privilèges, 8080),
+  `quizlet-api` (Node, 3000, migrations au démarrage), `quizlet-db` (Postgres 17). Services
+  préfixés `quizlet-` : leurs noms deviennent des alias DNS sur le réseau partagé `web`.
+- Images construites depuis la racine (`apps/*/Dockerfile`, contexte `.`). L'API est un bundle
+  tsdown autonome (pas de `node_modules` dans l'image). `.dockerignore` exclut `.env*` et `sso-*.md`.
+- `apps/web/nginx.conf` : les en-têtes de sécurité sont au niveau `server`. Ne pas ajouter de
+  `add_header` dans une `location` (cela annulerait leur héritage) : utiliser `expires`.

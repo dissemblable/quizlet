@@ -65,10 +65,12 @@ export function createTrustedProxyMatcher(
   entries: readonly string[],
   options: MatcherOptions = {},
 ): TrustedProxyMatcher {
+  // Cache court : après recréation de nginx, son ancienne IP ne reste de confiance que quelques
+  // secondes (un autre conteneur pourrait la récupérer). Le DNS Docker est local et peu coûteux.
   const {
     resolve = defaultResolver,
-    ttlMs = 30_000,
-    missRefreshMs = 5_000,
+    ttlMs = 5_000,
+    missRefreshMs = 1_000,
     now = Date.now,
     onResolveError = (hostname, error) =>
       console.warn(`Proxy de confiance « ${hostname} » non résolu :`, error),
