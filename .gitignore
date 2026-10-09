@@ -1,0 +1,23 @@
+# Dépendances et sorties de build
+node_modules/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Environnement : seuls l'exemple et les valeurs de dev (non secrètes) sont versionnés
+.env
+.env.*
+!.env.example
+!.env.development
+
+# Documentation d'infrastructure sensible : ne jamais versionner
+sso-*.md
+
+# Éditeurs et OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

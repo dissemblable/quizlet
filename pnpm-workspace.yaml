@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 bloque les scripts d'installation par défaut : seuls ceux-ci sont autorisés.
+onlyBuiltDependencies:
+  - esbuild
