@@ -1,15 +1,17 @@
 import type { SetInput } from '@quizlet/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { api } from './api'
 import { unwrap } from './http'
 
 export type SetDetail = InferResponseType<(typeof api.sets)[':id']['$get'], 200>['set']
+export type SetSummary = InferResponseType<typeof api.sets.$get, 200>['sets'][number]
 
 export const queryKeys = {
   me: ['me'] as const,
   sets: ['sets'] as const,
   setLists: ['sets', 'list'] as const,
+  setList: (search: string) => ['sets', 'list', search] as const,
   set: (id: string) => ['sets', 'detail', id] as const,
 }
 
@@ -19,6 +21,15 @@ export function useMe() {
     queryKey: queryKeys.me,
     queryFn: () => unwrap(api.me.$get()),
     staleTime: 5 * 60_000,
+  })
+}
+
+/** Ma bibliothèque, filtrée par titre. Garde la liste précédente affichée pendant une recherche. */
+export function useSets(search: string) {
+  return useQuery({
+    queryKey: queryKeys.setList(search),
+    queryFn: async () => (await unwrap(api.sets.$get({ query: search ? { q: search } : {} }))).sets,
+    placeholderData: keepPreviousData,
   })
 }
 

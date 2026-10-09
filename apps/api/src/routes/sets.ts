@@ -1,12 +1,16 @@
-import { setIdParamSchema, setInputSchema } from '@quizlet/shared'
+import { setIdParamSchema, setInputSchema, setsQuerySchema } from '@quizlet/shared'
 import { Hono } from 'hono'
 import type { Db } from '../db/client'
-import { createSet, deleteSet, duplicateSet, getSet, updateSet } from '../services/sets'
+import { createSet, deleteSet, duplicateSet, getSet, listSets, updateSet } from '../services/sets'
 import type { AppEnv } from '../types'
 import { validate } from '../validation'
 
 export function setsRoutes(db: Db) {
   return new Hono<AppEnv>()
+    .get('/', validate('query', setsQuerySchema), async (c) => {
+      const sets = await listSets(db, c.get('user'), c.req.valid('query').q)
+      return c.json({ sets })
+    })
     .post('/', validate('json', setInputSchema), async (c) => {
       const set = await createSet(db, c.get('user'), c.req.valid('json'))
       return c.json({ set }, 201)

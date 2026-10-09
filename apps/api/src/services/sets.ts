@@ -1,5 +1,5 @@
 import { COPY_SUFFIX, LIMITS, type setInputSchema, type Visibility } from '@quizlet/shared'
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { Db } from '../db/client'
 import { cards, type SetRow, sets, type User, users } from '../db/schema'
@@ -82,6 +82,32 @@ function toDetail(set: SetRow, ownerName: string, list: CardDetail[], user: User
     isOwner: set.ownerId === user.id,
     cards: list,
   }
+}
+
+/** Échappe les jokers de LIKE : « 100% » cherche littéralement « 100% ». */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+/** Bibliothèque : les sets de l'utilisateur, du plus récemment modifié au plus ancien. */
+export function listSets(db: Db, user: User, search?: string) {
+  const filters = [eq(sets.ownerId, user.id)]
+  if (search) filters.push(ilike(sets.title, `%${escapeLike(search)}%`))
+
+  return db
+    .select({
+      id: sets.id,
+      title: sets.title,
+      description: sets.description,
+      visibility: sets.visibility,
+      updatedAt: sets.updatedAt,
+      cardCount: count(cards.id),
+    })
+    .from(sets)
+    .leftJoin(cards, eq(cards.setId, sets.id))
+    .where(and(...filters))
+    .groupBy(sets.id)
+    .orderBy(desc(sets.updatedAt), asc(sets.title))
 }
 
 /** Charge un set lisible par l'utilisateur (auteur, ou set public). */

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { initials, pluralize } from './format'
+import { formatDate, initials, pluralize } from './format'
+
+describe('formatDate', () => {
+  it('formate une date ISO en français', () => {
+    expect(formatDate('2026-10-09T12:00:00.000Z')).toBe('9 octobre 2026')
+  })
+})
 
 describe('initials', () => {
   it('prend la première lettre du prénom et du nom', () => {

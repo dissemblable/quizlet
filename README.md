@@ -83,6 +83,7 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 |---|---|
 | `GET /health` | Sans identité (healthcheck Docker) |
 | `GET /me` | Utilisateur courant et `logoutUrl` |
+| `GET /sets?q=` | Ma bibliothèque : mes sets et leur nombre de cartes, recherche sur le titre |
 | `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées) |
 | `GET /sets/:id` | Auteur, ou n'importe quel utilisateur si le set est public |
 | `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction |
@@ -200,3 +201,6 @@ en production.
   que par glisser-déposer. Les lignes entièrement vides sont ignorées à l'enregistrement, et quitter
   la page avec des modifications non enregistrées demande confirmation.
 - Un set dupliqué est toujours privé, quelle que soit la visibilité de l'original.
+- Bibliothèque : la recherche porte sur le titre, sans tenir compte de la casse (`ILIKE`, jokers
+  `%` et `_` échappés), mais en tenant compte des accents. La bibliothèque ne liste que ses propres
+  sets : un set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.

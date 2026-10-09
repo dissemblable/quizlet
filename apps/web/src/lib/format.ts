@@ -8,6 +8,17 @@ export function initials(name: string): string {
     .toLocaleUpperCase('fr-FR')
 }
 
+const dateFormat = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
+/** « 9 octobre 2026 ». */
+export function formatDate(value: string | Date): string {
+  return dateFormat.format(typeof value === 'string' ? new Date(value) : value)
+}
+
 /** « 0 carte », « 1 carte », « 12 cartes ». */
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count.toLocaleString('fr-FR')} ${Math.abs(count) >= 2 ? plural : singular}`
