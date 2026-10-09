@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { FlashcardsPage } from '@/pages/FlashcardsPage'
 import { LibraryPage } from '@/pages/LibraryPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { RouteErrorPage } from '@/pages/RouteErrorPage'
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
       { path: 'sets/new', Component: NewSetPage },
       { path: 'sets/:id', Component: SetPage },
       { path: 'sets/:id/edit', Component: EditSetPage },
+      { path: 'sets/:id/flashcards', Component: FlashcardsPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

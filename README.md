@@ -201,6 +201,11 @@ en production.
   que par glisser-déposer. Les lignes entièrement vides sont ignorées à l'enregistrement, et quitter
   la page avec des modifications non enregistrées demande confirmation.
 - Un set dupliqué est toujours privé, quelle que soit la visibilité de l'original.
+- Flashcards : la session (position, « Je sais » / « À revoir ») vit en mémoire, dans la page.
+  Rien n'est enregistré, la répétition espacée étant hors périmètre. Activer ou désactiver le
+  mélange relance la session. Marquer une carte passe à la suivante. Raccourcis : Espace pour
+  retourner la carte, ← et → pour naviguer (désactivés pendant une saisie ; sur un bouton, Espace
+  active le bouton).
 - Bibliothèque : la recherche porte sur le titre, sans tenir compte de la casse (`ILIKE`, jokers
   `%` et `_` échappés), mais en tenant compte des accents. La bibliothèque ne liste que ses propres
   sets : un set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.

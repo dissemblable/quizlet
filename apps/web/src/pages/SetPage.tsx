@@ -1,9 +1,10 @@
-import { CopyIcon, LinkIcon, Loader2Icon, PencilIcon, PlusIcon } from 'lucide-react'
+import { CopyIcon, LayersIcon, LinkIcon, Loader2Icon, PencilIcon, PlusIcon } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { DeleteSetDialog } from '@/components/sets/DeleteSetDialog'
 import { VisibilityBadge } from '@/components/sets/VisibilityBadge'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
+import { StudyModeLink } from '@/components/study/StudyModeLink'
 import { Button } from '@/components/ui/button'
 import { pageTitle } from '@/config'
 import { pluralize } from '@/lib/format'
@@ -71,13 +72,25 @@ function SetOverview({ set }: { set: SetDetail }) {
           <span>{cardCount}</span>
           {!set.isOwner && <span>Créé par {set.owner.displayName}</span>}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight break-words">{set.title}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight wrap-break-word">{set.title}</h1>
         {set.description && (
-          <p className="max-w-prose whitespace-pre-line break-words text-muted-foreground">
+          <p className="max-w-prose whitespace-pre-line wrap-break-word text-muted-foreground">
             {set.description}
           </p>
         )}
       </header>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <StudyModeLink
+          to={`/sets/${set.id}/flashcards`}
+          icon={<LayersIcon />}
+          title="Flashcards"
+          description="Retournez les cartes et notez celles à revoir."
+          unavailableReason={
+            set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
+          }
+        />
+      </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
         {set.isOwner && (
@@ -129,8 +142,8 @@ function SetOverview({ set }: { set: SetDetail }) {
                 key={card.id}
                 className="grid gap-1 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-6"
               >
-                <p className="font-medium whitespace-pre-line break-words">{card.term}</p>
-                <p className="whitespace-pre-line break-words text-muted-foreground">
+                <p className="font-medium whitespace-pre-line wrap-break-word">{card.term}</p>
+                <p className="whitespace-pre-line wrap-break-word text-muted-foreground">
                   {card.definition}
                 </p>
               </li>
