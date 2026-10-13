@@ -22,5 +22,25 @@ services:
       timeout: 3s
       retries: 10
 
+  # Outil local (profil « tools », jamais démarré par `docker compose up`) : même script de
+  # sauvegarde qu'en production, sur la base de dev. Dumps dans ./backups (ignoré par git).
+  #   pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>
+  backup:
+    image: postgres:17-alpine
+    profiles: [tools]
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: quizlet
+      PGPASSWORD: quizlet
+      PGDATABASE: quizlet
+      TZ: Europe/Paris
+    volumes:
+      - ./docker/backup/backup.sh:/scripts/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -17,3 +17,7 @@
 
 # Documentation d'infrastructure sensible.
 sso-*.md
+
+# Sauvegardes de la base : jamais dans une image.
+backups
+**/*.dump

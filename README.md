@@ -104,7 +104,10 @@ docker-compose.prod.yml     production derrière Authelia
 | `pnpm test` | Vitest dans chaque package (l'API a besoin du Postgres de dev) |
 | `pnpm db:generate` | Génère une migration SQL à partir de `apps/api/src/db/schema.ts` |
 | `pnpm db:migrate` | Applique les migrations en attente |
-| `pnpm db:seed` | Recrée l'utilisateur de démo et ses sets (refusé si `NODE_ENV=production`) |
+| `pnpm db:seed` | Recrée l'utilisateur de démo, ses dossiers, tags, sets et une progression de révision (refusé si `NODE_ENV=production`) |
+| `pnpm db:backup` | Sauvegarde la base de dev dans `./backups` (même script qu'en production, via Docker) |
+| `pnpm db:verify <fichier>` | Restaure une sauvegarde dans une base temporaire et l'inspecte |
+| `pnpm db:restore <fichier>` | Remplace le contenu de la base de dev par la sauvegarde (confirmation demandée) |
 
 ## Base de données
 
@@ -331,8 +334,9 @@ changer côté Cloudflare (DNS wildcard et ingress attrape-tout) ni côté Authe
 | `quizlet-web` | nginx sans privilèges, port 8080 | `web` | Front statique (SPA) |
 | `quizlet-api` | Node 24, port 3000 | `web`, `quizlet-internal` | API Hono |
 | `quizlet-db` | PostgreSQL 17, volume `quizlet-pgdata` | `quizlet-internal` (`internal: true`) | Base de données |
+| `quizlet-backup` | PostgreSQL 17 (outils), volume `quizlet-backups` ou `BACKUP_DIR` | `quizlet-internal` | Sauvegardes quotidiennes ([détails](#sauvegardes)) |
 
-L'API et le front tournent en lecture seule (`read_only`), sans capacités Linux et avec
+L'API, le front et les sauvegardes tournent en lecture seule (`read_only`), sans capacités Linux et avec
 `no-new-privileges`. Les images de base sont multi-architectures : le build se fait nativement sur
 le serveur ARM64.
 
@@ -342,9 +346,10 @@ le serveur ARM64.
 cd /opt/stack/apps
 git clone <dépôt> quizlet && cd quizlet
 cp .env.example .env && chmod 600 .env
-# Dans .env : POSTGRES_PASSWORD=$(openssl rand -hex 32), et vérifier APP_ORIGIN / AUTH_LOGOUT_URL
+# Dans .env : POSTGRES_PASSWORD=$(openssl rand -hex 32), vérifier APP_ORIGIN / AUTH_LOGOUT_URL,
+# et régler les sauvegardes (BACKUP_DIR, BACKUP_TIME, BACKUP_RETENTION_DAYS, TZ)
 docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml ps        # les trois services en « healthy »
+docker compose -f docker-compose.prod.yml ps        # les quatre services en « healthy »
 ```
 
 Les migrations sont appliquées au démarrage de l'API (`MIGRATE_ON_START=true`). Pour les lancer
@@ -421,7 +426,7 @@ access_control:
 
 | # | Test | Résultat attendu |
 |---|---|---|
-| 1 | `docker compose -f docker-compose.prod.yml ps` | trois services `healthy`, colonne PORTS sans publication sur l'hôte |
+| 1 | `docker compose -f docker-compose.prod.yml ps` | quatre services `healthy`, colonne PORTS sans publication sur l'hôte |
 | 2 | `curl -I https://quizlet.valldoy.com/` | 302 vers `https://auth.valldoy.com/?rd=…` |
 | 3 | Idem avec `-H 'Remote-User: admin'`, sur `/` et `/api/me` | toujours 302, jamais 200 |
 | 4 | Connexion dans le navigateur | la bibliothèque s'affiche, avec votre nom dans l'en-tête |
@@ -434,12 +439,67 @@ identité (sans Authelia). Après recréation de ce nginx, un autre conteneur r�
 IP : le nouveau nginx restait accepté, le conteneur qui avait récupéré l'ancienne IP était refusé.
 Le test 6 redémarre le nginx du stack, donc toutes les apps quelques secondes : il est facultatif.
 
-### Sauvegarde
+### Sauvegardes
 
-La base vit dans le volume `quizlet_quizlet-pgdata`. À ajouter à la sauvegarde hors VPS du stack :
+La base vit dans le volume `quizlet_quizlet-pgdata`. Le service `quizlet-backup` la sauvegarde :
+
+- **Quand** : chaque jour à `BACKUP_TIME` (03:00 par défaut, fuseau `TZ`), et dès son démarrage si
+  aucune sauvegarde n'a moins de 26 heures (installation, longue interruption).
+- **Comment** : `pg_dump` au format custom (compressé), écrit d'abord en `.partial` puis renommé :
+  un fichier `quizlet-AAAA-MM-JJTHHMMSS.dump` est toujours complet. Un échec est journalisé et
+  n'écrase rien.
+- **Où** : `BACKUP_DIR`, un chemin de l'hôte (par exemple `/opt/backups/quizlet`, dossier
+  appartenant à root) ou, par défaut, le volume `quizlet_quizlet-backups`.
+- **Rotation** : après chaque sauvegarde réussie, celles de plus de `BACKUP_RETENTION_DAYS` jours
+  (14 par défaut) sont supprimées. La plus récente n'est donc jamais supprimée.
+- **Surveillance** : le conteneur est `healthy` tant que la dernière sauvegarde a moins de
+  26 heures (`docker inspect -f '{{.State.Health.Status}}' quizlet-backup`). Journaux horodatés en
+  français : `docker logs quizlet-backup`.
+- **Sécurité** : image `postgres:17-alpine` (même version que la base), script monté en lecture
+  seule depuis `docker/backup/backup.sh`, système de fichiers en lecture seule, aucune capacité
+  Linux, réseau `quizlet-internal` seulement, sans `ports:`. Le mot de passe vient de
+  `POSTGRES_PASSWORD` (`.env`).
+
+Commandes, depuis `/opt/stack/apps/quizlet` (`FICHIER` : nom d'une sauvegarde du dossier) :
 
 ```bash
-docker exec quizlet-db pg_dump -U quizlet quizlet | gzip > quizlet-$(date +%F).sql.gz
+C="docker compose -f docker-compose.prod.yml"
+$C exec quizlet-backup ls -lh /backups                     # sauvegardes disponibles
+$C exec quizlet-backup /bin/sh /scripts/backup.sh backup   # sauvegarde immédiate
+$C run --rm quizlet-backup verify FICHIER                  # vérification (base temporaire)
+```
+
+**Vérifier une sauvegarde** : `verify` la restaure dans une base temporaire
+(`quizlet_verify_…`), affiche le nombre de migrations, d'utilisateurs, de sets et de cartes, puis
+supprime cette base. La base de production n'est pas touchée.
+
+**Restaurer** (remplace tout le contenu de la base) :
+
+1. Vérifier la sauvegarde : `$C run --rm quizlet-backup verify FICHIER`.
+2. Arrêter l'API : `$C stop quizlet-api`.
+3. Restaurer : `$C run --rm quizlet-backup restore FICHIER`, puis taper `RESTAURER` (ou ajouter
+   `--yes` pour un script).
+4. Redémarrer l'API : `$C start quizlet-api`. Si la sauvegarde est antérieure à une migration,
+   l'API l'applique au démarrage.
+
+La restauration lit d'abord toute l'archive (une sauvegarde illisible est refusée avant de toucher
+à la base), puis, **en une seule transaction**, supprime les schémas `public` et `drizzle` et
+recrée tout depuis la sauvegarde. En cas d'erreur, la transaction est annulée et la base reste
+inchangée. Ce chemin a été testé : restauration complète, archive corrompue refusée, et
+sauvegarde de la V1 restaurée puis remise à niveau par les migrations.
+
+En local, le même script tourne contre la base de dev (dossier `./backups`, ignoré par git) :
+`pnpm db:backup`, `pnpm db:verify FICHIER`, `pnpm db:restore FICHIER`.
+
+**Copie hors du serveur (exemple non activé)** : les sauvegardes restent sur le VPS tant qu'aucune
+copie distante n'est configurée. Avec `BACKUP_DIR=/opt/backups/quizlet`, une tâche cron de l'hôte
+peut les envoyer ailleurs, par exemple avec rclone (remote configuré au préalable avec
+`rclone config`) ou rsync :
+
+```bash
+# /etc/cron.d/quizlet-backups-offsite — exemple, à adapter et à installer à la main
+30 4 * * * root rclone copy /opt/backups/quizlet distant:quizlet-backups --max-age 48h
+# ou : 30 4 * * * root rsync -a /opt/backups/quizlet/ sauvegarde@nas:/srv/quizlet/
 ```
 
 ### Piste : accès anonyme aux sets publics (hors V1)

@@ -16,7 +16,10 @@
     "test": "turbo run test",
     "db:generate": "pnpm --filter @quizlet/api db:generate",
     "db:migrate": "pnpm --filter @quizlet/api db:migrate",
-    "db:seed": "pnpm --filter @quizlet/api db:seed"
+    "db:seed": "pnpm --filter @quizlet/api db:seed",
+    "db:backup": "docker compose --profile tools run --rm backup backup",
+    "db:verify": "docker compose --profile tools run --rm backup verify",
+    "db:restore": "docker compose --profile tools run --rm backup restore"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
