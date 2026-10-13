@@ -16,6 +16,29 @@ export const LIMITS = {
   tagsPerSet: 10,
 } as const
 
+/** Paramètres de révision par défaut (tant que l'utilisateur ne les a pas modifiés). */
+export const DEFAULT_SETTINGS = {
+  timezone: 'Europe/Paris',
+  newCardsPerDay: 20,
+  reviewsPerDay: 200,
+  desiredRetention: 0.9,
+} as const
+
+/** Bornes des paramètres de révision. */
+export const SETTINGS_LIMITS = {
+  perDay: 9999,
+  minRetention: 0.7,
+  maxRetention: 0.99,
+} as const
+
+/** États FSRS d'une carte pour un utilisateur (`new` : jamais révisée). */
+export const CARD_STATES = ['new', 'learning', 'review', 'relearning'] as const
+export type CardState = (typeof CARD_STATES)[number]
+
+/** Notes FSRS : 1 À revoir, 2 Difficile, 3 Bien, 4 Facile. */
+export const RATINGS = [1, 2, 3, 4] as const
+export type Rating = (typeof RATINGS)[number]
+
 /** Taille maximale d'un texte ou d'un fichier importé, en octets UTF-8 (1 Mo). */
 export const IMPORT_MAX_BYTES = 1_000_000
 
@@ -47,4 +70,7 @@ export const MESSAGES = {
   separatorTooLong: 'Un séparateur ne peut pas dépasser 10 caractères',
   separatorsMustDiffer: 'Les séparateurs de terme et de carte doivent être différents',
   noCardToImport: 'Aucune carte valide à importer',
+  timezoneInvalid: 'Fuseau horaire inconnu',
+  perDayInvalid: `Choisissez un nombre entier entre 0 et ${SETTINGS_LIMITS.perDay}`,
+  retentionInvalid: `La rétention cible doit être comprise entre ${SETTINGS_LIMITS.minRetention} et ${SETTINGS_LIMITS.maxRetention}`,
 } as const

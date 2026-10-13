@@ -1,7 +1,9 @@
+import { DEFAULT_SETTINGS, type Rating } from '@quizlet/shared'
 import { eq } from 'drizzle-orm'
+import { createScheduler, fromFsrsCard, fromFsrsLog, toFsrsCard } from '../domain/scheduler'
 import { replaceSetTags } from '../services/tags'
-import type { Db } from './client'
-import { cards, folders, sets, tags, users } from './schema'
+import type { Db, Tx } from './client'
+import { cardReviews, cards, folders, reviewLogs, sets, tags, userSettings, users } from './schema'
 
 /** Identité de démo : identique à celle du mode d'authentification de dev (DEV_AUTH_USER=demo). */
 export const DEMO_USER = {
@@ -81,10 +83,11 @@ export const DEMO_SETS: readonly DemoSet[] = [
 ]
 
 /**
- * Crée (ou recrée) l'utilisateur de démo et ses sets d'exemple.
- * Idempotent : les sets existants de l'utilisateur de démo sont remplacés.
+ * Crée (ou recrée) l'utilisateur de démo, ses dossiers, ses tags, ses sets d'exemple et une
+ * progression de révision sur le premier set.
+ * Idempotent : les sets, dossiers et tags existants de l'utilisateur de démo sont remplacés.
  */
-export async function seedDemoData(db: Db) {
+export async function seedDemoData(db: Db, now = new Date()) {
   return db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
@@ -121,16 +124,70 @@ export async function seedDemoData(db: Db) {
       if (!set) throw new Error(`Impossible de créer le set « ${demoSet.title} »`)
       await replaceSetTags(tx, user.id, set.id, demoSet.tags)
 
-      await tx.insert(cards).values(
-        demoSet.cards.map(([term, definition], position) => ({
-          setId: set.id,
-          term,
-          definition,
-          position,
-        })),
-      )
+      const inserted = await tx
+        .insert(cards)
+        .values(
+          demoSet.cards.map(([term, definition], position) => ({
+            setId: set.id,
+            term,
+            definition,
+            position,
+          })),
+        )
+        .returning({ id: cards.id })
+      // Progression de démo sur le premier set (les cartes sont renvoyées dans l'ordre inséré).
+      if (demoSet === DEMO_SETS[0]) await seedProgress(tx, user.id, inserted, now)
     }
+
+    await tx
+      .insert(userSettings)
+      .values({ userId: user.id, ...DEFAULT_SETTINGS })
+      .onConflictDoUpdate({ target: userSettings.userId, set: DEFAULT_SETTINGS })
 
     return { user, setCount: DEMO_SETS.length }
   })
+}
+
+/**
+ * Révisions passées de démo (en jours, décimales permises) sur les premières cartes : la
+ * planification FSRS en déduit des cartes dues aujourd'hui, d'autres plus tard, et une carte
+ * ratée aujourd'hui (en réapprentissage dans la séance).
+ */
+const DEMO_PROGRESS: ReadonlyArray<ReadonlyArray<readonly [daysAgo: number, rating: Rating]>> = [
+  [
+    [14, 3],
+    [13.99, 3],
+    [10, 3],
+  ],
+  [[10, 4]],
+  [[9, 4]],
+  [[2, 4]],
+  [
+    [2, 3],
+    [1.99, 3],
+  ],
+  [
+    [1, 1],
+    [0.99, 3],
+    [0.98, 3],
+  ],
+  [[0, 1]],
+]
+
+async function seedProgress(tx: Tx, userId: string, cardList: Array<{ id: string }>, now: Date) {
+  const scheduler = createScheduler(DEFAULT_SETTINGS.desiredRetention)
+  for (const [index, history] of DEMO_PROGRESS.entries()) {
+    const cardId = cardList[index]?.id
+    if (!cardId) continue
+    let card = toFsrsCard(undefined, now)
+    const logs = []
+    for (const [daysAgo, rating] of history) {
+      const at = new Date(now.getTime() - daysAgo * 24 * 60 * 60_000)
+      const result = scheduler.next(card, at, rating)
+      card = result.card
+      logs.push({ userId, cardId, ...fromFsrsLog(result.log) })
+    }
+    await tx.insert(cardReviews).values({ userId, cardId, ...fromFsrsCard(card) })
+    await tx.insert(reviewLogs).values(logs)
+  }
 }

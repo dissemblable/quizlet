@@ -148,6 +148,11 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | `GET /sets/:id/quiz` | Quiconque peut lire le set : un QCM par carte (422 s'il a moins de 4 définitions différentes) |
 | `POST /sets/import` | Crée un set privé `{ title }` à partir de `{ text, separators: { term, card } }` : `{ set, imported, skipped }` |
 | `POST /sets/:id/import` | Auteur seul (404 / 403 sinon) : ajoute les cartes importées à la fin du set |
+| `GET /review/summary` | Compteurs du jour : `{ due, new }` (cartes dues et nouvelles cartes, limites appliquées) |
+| `GET /review/queue?setId=` | File de révision du jour, avec l'échéance prévue pour chaque note. `setId` : un set visible (404 sinon) |
+| `GET /review/due?setId=` | Cartes d'un set visible déjà commencées et dues aujourd'hui (option « à revoir » du mode écrit) |
+| `POST /review/cards/:cardId` | Note une carte d'un set visible (404 sinon) : `{ rating: 1..4 }` → nouvel état, `requeue` |
+| `GET /settings`, `PUT /settings` | Mes paramètres de révision (fuseau, limites quotidiennes, rétention cible) |
 | `GET /folders`, `POST /folders` | Mes dossiers (avec leur nombre de sets) ; création |
 | `PATCH /folders/:id`, `DELETE /folders/:id` | Propriétaire seul (404 sinon) : renommage, suppression |
 | `GET /tags`, `DELETE /tags/:id` | Mes tags (avec leur nombre de sets) ; suppression par le propriétaire seul (404 sinon) |
@@ -167,6 +172,40 @@ Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts
 
 Choix simple : le CRUD des cartes passe par l'éditeur du set (une page, un enregistrement atomique)
 plutôt que par une route par carte. Cela réduit la surface où vérifier les permissions.
+
+## Répétition espacée (FSRS)
+
+La planification utilise la bibliothèque [`ts-fsrs`](https://github.com/open-spaced-repetition/ts-fsrs)
+(algorithme FSRS, paramètres par défaut), côté API uniquement.
+
+- **Progression par utilisateur et par carte** (`card_reviews`), y compris sur les cartes d'un set
+  public d'un autre utilisateur : chacun a la sienne. Une carte sans progression est « nouvelle ».
+  Chaque note ajoute une ligne à l'historique (`review_logs`), gardé pour de futures statistiques.
+- **Notes** : 1 À revoir, 2 Difficile, 3 Bien, 4 Facile. Une carte nouvelle ou ratée passe par des
+  étapes courtes (1 et 10 minutes en apprentissage, 10 minutes en réapprentissage) avant de
+  revenir à plusieurs jours. Sans « fuzz » : la planification est déterministe.
+- **Rétention cible** (0,9 par défaut, de 0,70 à 0,99) : probabilité visée de se souvenir d'une
+  carte à son échéance. Plus elle est haute, plus les intervalles sont courts.
+- **Journée** : elle commence à minuit dans le fuseau de l'utilisateur (`Europe/Paris` par défaut,
+  puis celui du navigateur, modifiable dans les paramètres). Postgres calcule les bornes du jour,
+  changements d'heure compris.
+- **File du jour** :
+  - cartes en apprentissage ou en réapprentissage dues avant minuit, toujours proposées (sans
+    plafond, sinon une carte ratée ne reviendrait pas dans la séance) ;
+  - cartes en révision dues avant minuit, plus en retard d'abord, dans la limite des révisions
+    du jour (200 par défaut) ;
+  - nouvelles cartes, dans l'ordre des sets puis des cartes, dans la limite des nouvelles cartes
+    du jour (20 par défaut).
+
+  Les compteurs du jour se lisent dans l'historique : une révision compte comme nouvelle carte si
+  la carte était nouvelle avant la note, comme révision si elle était en révision.
+- **Révision du jour** : les cartes dues de mes sets **et** des sets publics que j'ai commencé à
+  réviser (tant qu'ils restent publics), mais les nouvelles cartes de mes sets seulement.
+  **Réviser ce set** : la même file, limitée à un set visible, nouvelles cartes comprises.
+- **Séance** : une carte notée qui reste due aujourd'hui (étape d'apprentissage) revient en fin de
+  séance. Les échéances prévues sous chaque bouton sont calculées par l'API à l'ouverture.
+- Modifier le texte d'une carte conserve sa progression ; la supprimer supprime sa progression et
+  son historique ; un set dupliqué repart de zéro. Les flashcards de la V1 n'enregistrent rien.
 
 ## Import de cartes
 
