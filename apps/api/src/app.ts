@@ -9,8 +9,10 @@ import { errorBody, handleError } from './errors'
 import { csrfGuard } from './middleware/csrf'
 import { type ClientIpResolver, identity } from './middleware/identity'
 import { createTrustedProxyMatcher, type TrustedProxyMatcher } from './middleware/trusted-proxies'
+import { foldersRoutes } from './routes/folders'
 import { meRoutes } from './routes/me'
 import { setsRoutes } from './routes/sets'
+import { tagsRoutes } from './routes/tags'
 import { createUserResolver } from './services/users'
 import type { AppEnv } from './types'
 
@@ -67,6 +69,8 @@ export function createApp({ db, config, trustedProxies, clientIp }: AppDeps) {
       )
       .route('/me', meRoutes(config.logoutUrl))
       .route('/sets', setsRoutes(db))
+      .route('/folders', foldersRoutes(db))
+      .route('/tags', tagsRoutes(db))
   )
 }
 

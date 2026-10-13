@@ -11,7 +11,13 @@ export const LIMITS = {
   definition: 1000,
   cards: 500,
   search: 100,
+  folderName: 60,
+  tagName: 30,
+  tagsPerSet: 10,
 } as const
+
+/** Nombre de sets par page dans la bibliothèque. */
+export const LIBRARY_PAGE_SIZE = 24
 
 /** Nombre minimal de cartes (aux définitions distinctes) pour générer un quiz. */
 export const QUIZ_MIN_CARDS = 4
@@ -28,4 +34,9 @@ export const MESSAGES = {
   definitionRequired: 'La définition est requise',
   definitionTooLong: `La définition ne peut pas dépasser ${LIMITS.definition} caractères`,
   tooManyCards: `Un set ne peut pas contenir plus de ${LIMITS.cards} cartes`,
+  folderNameRequired: 'Le nom du dossier est requis',
+  folderNameTooLong: `Le nom du dossier ne peut pas dépasser ${LIMITS.folderName} caractères`,
+  tagRequired: 'Un tag ne peut pas être vide',
+  tagTooLong: `Un tag ne peut pas dépasser ${LIMITS.tagName} caractères`,
+  tooManyTags: `Un set ne peut pas avoir plus de ${LIMITS.tagsPerSet} tags`,
 } as const

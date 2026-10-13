@@ -4,13 +4,18 @@ Application de flashcards auto-hébergée, inspirée de Quizlet, qui tourne derr
 existant. Elle n'a ni inscription ni mot de passe : l'identité vient du reverse proxy (nginx +
 Authelia, en forward-auth).
 
-## Fonctionnalités (V1)
+## Fonctionnalités
 
 - **Identité SSO** : nom et email venus d'Authelia, affichés dans l'en-tête, avec déconnexion vers
   le portail Authelia.
-- **Sets de cartes** : titre, description facultative, visibilité privée ou publique. Un éditeur
-  sur une seule page permet d'ajouter, modifier, supprimer et réordonner les cartes.
-- **Bibliothèque** : mes sets, leur nombre de cartes, recherche par titre.
+- **Sets de cartes** : titre, description facultative, visibilité privée ou publique, tags. Un
+  éditeur sur une seule page permet d'ajouter, modifier, supprimer et réordonner les cartes.
+- **Bibliothèque** : mes sets et leur nombre de cartes, paginés, filtrés par dossier (« Tous »,
+  « Sans dossier » ou un dossier) et par tags, avec recherche.
+- **Dossiers et tags** (V2) : dossiers à plat (un seul niveau) créés, renommés et supprimés depuis
+  la bibliothèque, où le menu de chaque set permet de le ranger. Tags propres à chaque utilisateur,
+  créés à la volée dans l'éditeur (10 par set au plus) et supprimables depuis la bibliothèque.
+  Supprimer un dossier ne supprime pas ses sets ; supprimer un tag le retire des sets.
 - **Flashcards** : carte qui se retourne, précédent/suivant, mélange, raccourcis clavier, barre de
   progression, « Je sais » / « À revoir » et récapitulatif de fin.
 - **Quiz** : questions à choix multiples générées à partir des cartes (la bonne définition et trois
@@ -126,13 +131,17 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 |---|---|
 | `GET /health` | Sans identité (healthcheck Docker) |
 | `GET /me` | Utilisateur courant et `logoutUrl` |
-| `GET /sets?q=` | Ma bibliothèque : mes sets et leur nombre de cartes, recherche sur le titre |
-| `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées) |
+| `GET /sets?q=&folder=&tags=&page=` | Ma bibliothèque, 24 sets par page : `{ sets, total, page, pageSize }`. `folder` vaut un identifiant ou `none` ; `tags` liste des identifiants séparés par des virgules |
+| `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées, tags facultatifs) |
 | `GET /sets/:id` | Auteur, ou n'importe quel utilisateur si le set est public |
-| `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction |
+| `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction (tags remplacés s'ils sont fournis) |
 | `DELETE /sets/:id` | Auteur seul |
+| `PUT /sets/:id/folder` | Auteur seul : `{ folderId }` range le set dans l'un de ses dossiers, `null` l'en sort |
 | `POST /sets/:id/duplicate` | Quiconque peut lire le set : crée une copie privée « … (copie) » |
 | `GET /sets/:id/quiz` | Quiconque peut lire le set : un QCM par carte (422 s'il a moins de 4 définitions différentes) |
+| `GET /folders`, `POST /folders` | Mes dossiers (avec leur nombre de sets) ; création |
+| `PATCH /folders/:id`, `DELETE /folders/:id` | Propriétaire seul (404 sinon) : renommage, suppression |
+| `GET /tags`, `DELETE /tags/:id` | Mes tags (avec leur nombre de sets) ; suppression par le propriétaire seul (404 sinon) |
 
 Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts` :
 
@@ -140,9 +149,12 @@ Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts
   plutôt que 403 pour ne pas révéler qu'il existe.
 - Un set public est lisible et duplicable par tout utilisateur authentifié. Le modifier ou le
   supprimer est **interdit (403)** à tout autre que son auteur.
-- `PUT` conserve l'identifiant des cartes qui appartiennent déjà au set. Un identifiant inconnu,
-  ou celui d'une carte d'un autre set, est ignoré : la carte est créée comme nouvelle. Une carte
-  d'un autre set n'est donc jamais modifiée.
+- `PUT` conserve l'identifiant des cartes qui appartiennent déjà au set : elles sont modifiées sur
+  place, si bien que leur progression de révision est conservée. Un identifiant inconnu, ou celui
+  d'une carte d'un autre set, est ignoré : la carte est créée comme nouvelle. Une carte d'un autre
+  set n'est donc jamais modifiée.
+- Dossiers et tags appartiennent à un utilisateur : ceux d'un autre sont introuvables (404). Le
+  dossier et les tags d'un set public ne sont jamais renvoyés à un autre lecteur que son auteur.
 
 Choix simple : le CRUD des cartes passe par l'éditeur du set (une page, un enregistrement atomique)
 plutôt que par une route par carte. Cela réduit la surface où vérifier les permissions.
@@ -399,6 +411,17 @@ en production.
   pour respecter la CSP `script-src 'self'`.
 - Une session Authelia expirée en cours d'édition affiche une bannière « Se reconnecter ». La
   saisie n'est pas sauvegardée automatiquement : la bannière invite à la copier avant de recharger.
+
+Choix de la V2 :
+
+- Bibliothèque : 24 sets par page ; dossier, tags et page restent dans l'URL. Plusieurs tags
+  sélectionnés filtrent en **ET** (le set doit les porter tous). Ranger un set dans un dossier ne
+  change pas sa date de modification.
+- Tags : un nom par utilisateur, sans tenir compte de la casse (« Anglais » et « anglais » sont le
+  même tag, qui garde l'orthographe de sa création). Un tag se crée dans l'éditeur et se supprime
+  depuis la bibliothèque ; il ne se renomme pas. Les noms de dossier, eux, peuvent se répéter.
+- Dupliquer un set ne copie ni ses tags, ni son dossier, ni la progression : la copie repart de
+  zéro.
 
 ## Tests
 

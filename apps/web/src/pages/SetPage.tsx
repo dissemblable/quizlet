@@ -80,6 +80,12 @@ function SetOverview({ set }: { set: SetDetail }) {
           <VisibilityBadge visibility={set.visibility} />
           <span>{cardCount}</span>
           {!set.isOwner && <span>Créé par {set.owner.displayName}</span>}
+          {set.tags.length > 0 && (
+            <span>
+              <span className="sr-only">Tags : </span>
+              {set.tags.map((tag) => `#${tag.name}`).join(' ')}
+            </span>
+          )}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight wrap-break-word">{set.title}</h1>
         {set.description && (

@@ -69,6 +69,7 @@ describe('toSetInput', () => {
         { term: '', definition: '' },
         { term: 'a spoon', definition: 'une cuillère' },
       ],
+      tags: ['anglais'],
     })
     const input = toSetInput(parsed)
     expect(input).toEqual({
@@ -79,6 +80,7 @@ describe('toSetInput', () => {
         { id: '0a6e3c2a-9b1f-4c3d-8e5f-6a7b8c9d0e1f', term: 'a knife', definition: 'un couteau' },
         { term: 'a spoon', definition: 'une cuillère' },
       ],
+      tags: ['anglais'],
     })
     expect(setInputSchema.safeParse(input).success).toBe(true)
   })
@@ -91,12 +93,14 @@ describe('setToFormValues', () => {
       description: null,
       visibility: 'private',
       cards: [{ id: 'c1', term: 'H', definition: 'Hydrogène' }],
+      tags: [{ name: 'chimie' }],
     })
     expect(values).toEqual({
       title: 'Chimie',
       description: '',
       visibility: 'private',
       cards: [{ cardId: 'c1', term: 'H', definition: 'Hydrogène' }],
+      tags: ['chimie'],
     })
   })
 
@@ -106,6 +110,7 @@ describe('setToFormValues', () => {
       description: null,
       visibility: 'private',
       cards: [],
+      tags: [],
     })
     expect(values.cards).toEqual([{ term: '', definition: '' }])
   })

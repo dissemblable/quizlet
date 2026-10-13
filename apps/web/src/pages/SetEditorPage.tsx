@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { LIMITS } from '@quizlet/shared'
 import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { CardFieldsRow } from '@/components/sets/CardFieldsRow'
+import { TagInput } from '@/components/sets/TagInput'
 import { UnsavedChangesGuard } from '@/components/sets/UnsavedChangesGuard'
 import { EmptyState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -25,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { pageTitle } from '@/config'
 import { pluralize } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
-import { type SetDetail, useCreateSet, useUpdateSet } from '@/lib/queries'
+import { type SetDetail, useCreateSet, useTags, useUpdateSet } from '@/lib/queries'
 import {
   countFilledCards,
   emptyCard,
@@ -98,6 +100,7 @@ function SetEditor({ set, initialValues }: { set?: SetDetail; initialValues: Set
     formState: { errors, isDirty, isSubmitting },
   } = form
   const { fields, append, remove, move } = useFieldArray({ control, name: 'cards' })
+  const tagNames = useTags().data?.map((tag) => tag.name) ?? []
   const filledCount = countFilledCards(useWatch({ control, name: 'cards' }) ?? [])
   const cardsError = errors.cards?.root?.message ?? errors.cards?.message
 
@@ -190,6 +193,28 @@ function SetEditor({ set, initialValues }: { set?: SetDetail; initialValues: Set
                 ))}
               </RadioGroup>
             </FieldSet>
+          )}
+        />
+
+        <Controller
+          control={control}
+          name="tags"
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor="tags">
+                Tags{' '}
+                <span className="font-normal text-muted-foreground">
+                  (facultatifs, {LIMITS.tagsPerSet} au plus)
+                </span>
+              </FieldLabel>
+              <TagInput
+                id="tags"
+                value={field.value}
+                onChange={field.onChange}
+                suggestions={tagNames}
+              />
+              <FieldDescription>Entrée ou virgule pour ajouter un tag.</FieldDescription>
+            </Field>
           )}
         />
       </FieldGroup>

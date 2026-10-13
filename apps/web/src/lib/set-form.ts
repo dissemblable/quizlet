@@ -2,6 +2,7 @@ import {
   LIMITS,
   MESSAGES,
   type SetInput,
+  tagNameSchema,
   titleSchema,
   type Visibility,
   visibilitySchema,
@@ -35,6 +36,7 @@ export const setFormSchema = z.object({
   cards: z
     .array(cardFormSchema)
     .refine((list) => list.filter(isFilled).length <= LIMITS.cards, MESSAGES.tooManyCards),
+  tags: z.array(tagNameSchema).max(LIMITS.tagsPerSet, MESSAGES.tooManyTags),
 })
 
 export type SetFormValues = z.input<typeof setFormSchema>
@@ -59,6 +61,7 @@ export function newSetFormValues(): SetFormValues {
     description: '',
     visibility: 'private',
     cards: [emptyCard(), emptyCard(), emptyCard()],
+    tags: [],
   }
 }
 
@@ -67,6 +70,7 @@ interface EditableSet {
   description: string | null
   visibility: Visibility
   cards: ReadonlyArray<{ id: string; term: string; definition: string }>
+  tags: ReadonlyArray<{ name: string }>
 }
 
 export function setToFormValues(set: EditableSet): SetFormValues {
@@ -78,6 +82,7 @@ export function setToFormValues(set: EditableSet): SetFormValues {
       set.cards.length > 0
         ? set.cards.map(({ id, term, definition }) => ({ cardId: id, term, definition }))
         : [emptyCard()],
+    tags: set.tags.map((tag) => tag.name),
   }
 }
 
@@ -92,5 +97,6 @@ export function toSetInput(values: SetFormOutput): SetInput {
       term: term.trim(),
       definition: definition.trim(),
     })),
+    tags: values.tags,
   }
 }

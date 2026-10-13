@@ -3,16 +3,29 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import type { InferResponseType } from 'hono/client'
 import { api } from './api'
 import { unwrap } from './http'
+import { libraryParams } from './library'
 
 export type SetDetail = InferResponseType<(typeof api.sets)[':id']['$get'], 200>['set']
 export type SetSummary = InferResponseType<typeof api.sets.$get, 200>['sets'][number]
+export type FolderSummary = InferResponseType<typeof api.folders.$get, 200>['folders'][number]
+export type TagSummary = InferResponseType<typeof api.tags.$get, 200>['tags'][number]
+
+/** Filtres de la bibliothèque (reflétés dans l'URL). `folder` : identifiant, ou « none ». */
+export interface LibraryFilters {
+  q: string
+  folder?: string
+  tags: string[]
+  page: number
+}
 
 export const queryKeys = {
   me: ['me'] as const,
   sets: ['sets'] as const,
   setLists: ['sets', 'list'] as const,
-  setList: (search: string) => ['sets', 'list', search] as const,
+  setList: (filters: LibraryFilters) => ['sets', 'list', filters] as const,
   set: (id: string) => ['sets', 'detail', id] as const,
+  folders: ['folders'] as const,
+  tags: ['tags'] as const,
   // Hors de ['sets', …] : aucune invalidation de set ne doit régénérer un quiz en cours.
   quiz: (id: string, attempt: number) => ['quiz', id, attempt] as const,
 }
@@ -26,11 +39,11 @@ export function useMe() {
   })
 }
 
-/** Ma bibliothèque, filtrée par titre. Garde la liste précédente affichée pendant une recherche. */
-export function useSets(search: string) {
+/** Ma bibliothèque, filtrée et paginée. Garde la page précédente affichée pendant le chargement. */
+export function useSets(filters: LibraryFilters) {
   return useQuery({
-    queryKey: queryKeys.setList(search),
-    queryFn: async () => (await unwrap(api.sets.$get({ query: search ? { q: search } : {} }))).sets,
+    queryKey: queryKeys.setList(filters),
+    queryFn: () => unwrap(api.sets.$get({ query: libraryParams(filters) })),
     placeholderData: keepPreviousData,
   })
 }
@@ -52,16 +65,42 @@ export function useQuiz(id: string, attempt: number) {
   })
 }
 
+export function useFolders() {
+  return useQuery({
+    queryKey: queryKeys.folders,
+    queryFn: async () => (await unwrap(api.folders.$get())).folders,
+  })
+}
+
+export function useTags() {
+  return useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: async () => (await unwrap(api.tags.$get())).tags,
+  })
+}
+
+/** Listes de la bibliothèque, dossiers et tags (avec leurs compteurs) à recharger. */
+function useInvalidateLibrary() {
+  const queryClient = useQueryClient()
+  return ({ details = false } = {}) => {
+    // `details` : le dossier ou les tags affichés dans le détail des sets ont pu changer.
+    void queryClient.invalidateQueries({ queryKey: details ? queryKeys.sets : queryKeys.setLists })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.folders })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tags })
+  }
+}
+
 function useSetCache() {
   const queryClient = useQueryClient()
+  const invalidateLibrary = useInvalidateLibrary()
   return {
     store(set: SetDetail) {
       queryClient.setQueryData(queryKeys.set(set.id), set)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.setLists })
+      invalidateLibrary()
     },
     drop(id: string) {
       queryClient.removeQueries({ queryKey: queryKeys.set(id) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.setLists })
+      invalidateLibrary()
     },
   }
 }
@@ -97,5 +136,49 @@ export function useDuplicateSet() {
     mutationFn: async (id: string) =>
       (await unwrap(api.sets[':id'].duplicate.$post({ param: { id } }))).set,
     onSuccess: cache.store,
+  })
+}
+
+/** Range un set dans un dossier, ou l'en sort (`folderId: null`). */
+export function useMoveSet() {
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: ({ setId, folderId }: { setId: string; folderId: string | null }) =>
+      unwrap(api.sets[':id'].folder.$put({ param: { id: setId }, json: { folderId } })),
+    onSuccess: () => invalidateLibrary({ details: true }),
+  })
+}
+
+export function useCreateFolder() {
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: async (name: string) =>
+      (await unwrap(api.folders.$post({ json: { name } }))).folder,
+    onSuccess: () => invalidateLibrary(),
+  })
+}
+
+export function useRenameFolder() {
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      unwrap(api.folders[':id'].$patch({ param: { id }, json: { name } })),
+    onSuccess: () => invalidateLibrary(),
+  })
+}
+
+export function useDeleteFolder() {
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.folders[':id'].$delete({ param: { id } })),
+    onSuccess: () => invalidateLibrary({ details: true }),
+  })
+}
+
+export function useDeleteTag() {
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.tags[':id'].$delete({ param: { id } })),
+    onSuccess: () => invalidateLibrary({ details: true }),
   })
 }

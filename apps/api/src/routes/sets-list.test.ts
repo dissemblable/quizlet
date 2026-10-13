@@ -1,4 +1,4 @@
-import { LIMITS } from '@quizlet/shared'
+import { LIBRARY_PAGE_SIZE, LIMITS } from '@quizlet/shared'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sets } from '../db/schema'
@@ -10,6 +10,8 @@ const db = useTestDb()
 
 interface ListJson {
   sets: Array<{ id: string; title: string; visibility: string; cardCount: number }>
+  total: number
+  page: number
 }
 
 let request: ReturnType<typeof createTestClient>['request']
@@ -86,6 +88,17 @@ describe('GET /api/sets', () => {
 
   it('renvoie une liste vide à un nouvel utilisateur', async () => {
     expect((await listAs('carol')).body.sets).toEqual([])
+  })
+
+  it('pagine la bibliothèque et renvoie le total', async () => {
+    for (let i = 0; i <= LIBRARY_PAGE_SIZE; i++) await createSetAs('alice', `Set ${i}`, 0)
+
+    const first = (await listAs('alice')).body
+    expect(first).toMatchObject({ total: LIBRARY_PAGE_SIZE + 1, page: 1 })
+    expect(first.sets).toHaveLength(LIBRARY_PAGE_SIZE)
+    const second = (await listAs('alice', '?page=2')).body
+    expect(second.sets.map((set) => set.title)).toEqual(['Set 0'])
+    expect((await listAs('alice', '?page=0')).status).toBe(400)
   })
 })
 

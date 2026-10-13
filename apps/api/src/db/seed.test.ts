@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { useTestDb } from '../test/test-db'
-import { cards, sets, users } from './schema'
+import { cards, folders, sets, setTags, tags, users } from './schema'
 import { DEMO_SETS, DEMO_USER, seedDemoData } from './seed'
 
 const db = useTestDb()
@@ -31,6 +31,15 @@ describe('seedDemoData', () => {
     await seedDemoData(db)
     expect(await db.select().from(users)).toHaveLength(1)
     expect(await db.select().from(sets)).toHaveLength(DEMO_SETS.length)
+    expect(await db.select().from(folders)).toHaveLength(2)
+    expect(await db.select().from(tags)).toHaveLength(5)
+  })
+
+  it('range les sets privés dans des dossiers et pose des tags', async () => {
+    await seedDemoData(db)
+    const demoFolders = await db.select({ name: folders.name }).from(folders)
+    expect(demoFolders.map((folder) => folder.name).sort()).toEqual(['Langues', 'Sciences'])
+    expect(await db.select().from(setTags)).toHaveLength(5)
   })
 })
 

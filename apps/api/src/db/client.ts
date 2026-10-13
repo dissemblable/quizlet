@@ -9,3 +9,6 @@ export function createDb(url: string, options: { max?: number } = {}) {
 }
 
 export type Db = ReturnType<typeof createDb>['db']
+/** Transaction ouverte par `db.transaction` ; `Executor` désigne l'une ou l'autre. */
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+export type Executor = Db | Tx

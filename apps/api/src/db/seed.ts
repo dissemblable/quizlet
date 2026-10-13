@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
+import { replaceSetTags } from '../services/tags'
 import type { Db } from './client'
-import { cards, sets, users } from './schema'
+import { cards, folders, sets, tags, users } from './schema'
 
 /** Identité de démo : identique à celle du mode d'authentification de dev (DEV_AUTH_USER=demo). */
 export const DEMO_USER = {
@@ -13,6 +14,8 @@ interface DemoSet {
   title: string
   description: string
   visibility: 'private' | 'public'
+  folder?: string
+  tags: readonly string[]
   cards: ReadonlyArray<readonly [term: string, definition: string]>
 }
 
@@ -21,6 +24,7 @@ export const DEMO_SETS: readonly DemoSet[] = [
     title: 'Capitales européennes',
     description: 'Associer chaque pays à sa capitale.',
     visibility: 'public',
+    tags: ['géographie', 'europe'],
     cards: [
       ['France', 'Paris'],
       ['Allemagne', 'Berlin'],
@@ -40,6 +44,8 @@ export const DEMO_SETS: readonly DemoSet[] = [
     title: 'Anglais : la cuisine',
     description: 'Vocabulaire anglais des ustensiles et des gestes en cuisine.',
     visibility: 'private',
+    folder: 'Langues',
+    tags: ['anglais', 'vocabulaire'],
     cards: [
       ['a knife', 'un couteau'],
       ['a spoon', 'une cuillère'],
@@ -57,6 +63,8 @@ export const DEMO_SETS: readonly DemoSet[] = [
     title: 'Chimie : symboles des éléments',
     description: 'Les symboles chimiques les plus courants.',
     visibility: 'private',
+    folder: 'Sciences',
+    tags: ['chimie'],
     cards: [
       ['H', 'Hydrogène'],
       ['He', 'Hélium'],
@@ -89,18 +97,29 @@ export async function seedDemoData(db: Db) {
     if (!user) throw new Error("Impossible de créer l'utilisateur de démo")
 
     await tx.delete(sets).where(eq(sets.ownerId, user.id))
+    await tx.delete(folders).where(eq(folders.ownerId, user.id))
+    await tx.delete(tags).where(eq(tags.ownerId, user.id))
+
+    const folderNames = [...new Set(DEMO_SETS.flatMap((demoSet) => demoSet.folder ?? []))]
+    const demoFolders = await tx
+      .insert(folders)
+      .values(folderNames.map((name) => ({ ownerId: user.id, name })))
+      .returning()
+    const folderIds = new Map(demoFolders.map((folder) => [folder.name, folder.id]))
 
     for (const demoSet of DEMO_SETS) {
       const [set] = await tx
         .insert(sets)
         .values({
           ownerId: user.id,
+          folderId: demoSet.folder ? folderIds.get(demoSet.folder) : null,
           title: demoSet.title,
           description: demoSet.description,
           visibility: demoSet.visibility,
         })
         .returning({ id: sets.id })
       if (!set) throw new Error(`Impossible de créer le set « ${demoSet.title} »`)
+      await replaceSetTags(tx, user.id, set.id, demoSet.tags)
 
       await tx.insert(cards).values(
         demoSet.cards.map(([term, definition], position) => ({
