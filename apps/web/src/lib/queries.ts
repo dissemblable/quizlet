@@ -48,6 +48,17 @@ export function useSets(filters: LibraryFilters) {
   })
 }
 
+/** Recherche globale (palette Ctrl+K) : même requête, donc même cache, que la bibliothèque. */
+export function useSearchSets(q: string) {
+  const filters = { q, tags: [], page: 1 }
+  return useQuery({
+    queryKey: queryKeys.setList(filters),
+    queryFn: () => unwrap(api.sets.$get({ query: libraryParams(filters) })),
+    enabled: q !== '',
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useSet(id: string) {
   return useQuery({
     queryKey: queryKeys.set(id),

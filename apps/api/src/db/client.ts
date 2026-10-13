@@ -3,7 +3,12 @@ import postgres from 'postgres'
 import * as schema from './schema'
 
 export function createDb(url: string, options: { max?: number } = {}) {
-  const client = postgres(url, { max: options.max ?? 10, onnotice: () => {} })
+  const client = postgres(url, {
+    max: options.max ?? 10,
+    onnotice: () => {},
+    // Requêtes courtes : la compilation JIT coûtait ~230 ms à la recherche pour ~3 ms d'exécution.
+    connection: { jit: 'off' },
+  })
   const db = drizzle({ client, schema })
   return { db, close: () => client.end({ timeout: 5 }) }
 }

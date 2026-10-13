@@ -49,7 +49,7 @@ export function LibraryPage() {
         </div>
         <div className="relative w-full sm:max-w-xs">
           <label htmlFor="search" className="sr-only">
-            Rechercher un set par titre
+            Rechercher dans mes sets
           </label>
           <SearchIcon
             aria-hidden="true"
@@ -83,7 +83,7 @@ export function LibraryPage() {
           <EmptyState
             icon={<SearchXIcon />}
             title="Aucun résultat"
-            description={`Aucun de vos sets ne contient « ${search} » dans son titre.`}
+            description={`Aucun de vos sets ne correspond à « ${search} ».`}
             action={
               <Button variant="outline" onClick={() => setInput('')}>
                 Effacer la recherche

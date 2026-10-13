@@ -71,6 +71,32 @@ describe('GET /api/sets', () => {
     expect(body.sets.map((set) => set.title)).toEqual(['Capitales européennes'])
   })
 
+  it('cherche aussi dans la description, les tags et le contenu des cartes', async () => {
+    const create = (title: string, extra: object) =>
+      request('/api/sets', {
+        method: 'POST',
+        as: 'alice',
+        body: { title, description: null, visibility: 'private', cards: [], ...extra },
+      })
+    await create('Description', { description: 'Révisions du brevet' })
+    await create('Tag', { tags: ['brevet blanc'] })
+    await create('Terme', { cards: [{ term: 'Brevet des collèges', definition: 'examen' }] })
+    await create('Définition', { cards: [{ term: 'DNB', definition: 'diplôme du BREVET' }] })
+    await create('Hors sujet', {
+      description: 'Rien à voir',
+      cards: [{ term: 'a', definition: 'b' }],
+    })
+    await createSetAs('bob', 'Brevet de Bob', 1, 'public')
+
+    const { body } = await listAs('alice', '?q=brevet')
+    expect(body.sets.map((set) => set.title).sort()).toEqual([
+      'Description',
+      'Définition',
+      'Tag',
+      'Terme',
+    ])
+  })
+
   it('traite % et _ comme des caractères ordinaires', async () => {
     await createSetAs('alice', '100% maths')
     await createSetAs('alice', 'Histoire')

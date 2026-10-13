@@ -49,7 +49,7 @@ describe('bibliothèque', () => {
     await renderApp()
     await screen.findByRole('list', { name: 'Mes sets' })
 
-    await user.type(screen.getByLabelText('Rechercher un set par titre'), 'chim')
+    await user.type(screen.getByLabelText('Rechercher dans mes sets'), 'chim')
     await waitFor(() =>
       expect(fetchedUrls(fetchMock).some((url) => url.includes('/api/sets?q=chim'))).toBe(true),
     )

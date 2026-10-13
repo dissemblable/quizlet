@@ -16,12 +16,13 @@ import {
   ilike,
   isNull,
   notInArray,
+  or,
   type SQL,
   sql,
 } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { Db, Executor, Tx } from '../db/client'
-import { cards, type SetRow, sets, setTags, type User, users } from '../db/schema'
+import { cards, type SetRow, sets, setTags, tags, type User, users } from '../db/schema'
 import { decideAccess } from '../domain/permissions'
 import { forbidden, notFound } from '../errors'
 import { assertOwnFolder } from './folders'
@@ -103,7 +104,7 @@ export async function insertCards(
 /** Détail d'un set ; les tags ne sont chargés que pour son auteur. */
 async function toDetail(db: Executor, set: SetRow, ownerName: string, user: User) {
   const isOwner = set.ownerId === user.id
-  const tags = isOwner ? ((await loadTagsBySet(db, [set.id])).get(set.id) ?? []) : []
+  const tagList = isOwner ? ((await loadTagsBySet(db, [set.id])).get(set.id) ?? []) : []
   return {
     id: set.id,
     title: set.title,
@@ -114,7 +115,7 @@ async function toDetail(db: Executor, set: SetRow, ownerName: string, user: User
     owner: { displayName: ownerName },
     isOwner,
     folderId: isOwner ? set.folderId : null,
-    tags,
+    tags: tagList,
     cards: await loadCards(db, set.id),
   } satisfies SetDetail
 }
@@ -125,12 +126,42 @@ export function escapeLike(value: string): string {
 }
 
 /**
+ * Recherche dans le titre, la description, les tags et les cartes d'un set (sans tenir compte de
+ * la casse). Les index GIN trigram (pg_trgm) accélèrent ces `ILIKE '%…%'`.
+ */
+function searchCondition(db: Db, search: string) {
+  const pattern = `%${escapeLike(search)}%`
+  return or(
+    ilike(sets.title, pattern),
+    ilike(sets.description, pattern),
+    exists(
+      db
+        .select({ id: cards.id })
+        .from(cards)
+        .where(
+          and(
+            eq(cards.setId, sets.id),
+            or(ilike(cards.term, pattern), ilike(cards.definition, pattern)),
+          ),
+        ),
+    ),
+    exists(
+      db
+        .select({ tagId: setTags.tagId })
+        .from(setTags)
+        .innerJoin(tags, eq(tags.id, setTags.tagId))
+        .where(and(eq(setTags.setId, sets.id), ilike(tags.name, pattern))),
+    ),
+  )
+}
+
+/**
  * Bibliothèque : les sets de l'utilisateur, filtrés (recherche, dossier, tags) et paginés, du plus
  * récemment modifié au plus ancien.
  */
 export async function listSets(db: Db, user: User, query: SetsQuery = {}) {
-  const filters: SQL[] = [eq(sets.ownerId, user.id)]
-  if (query.q) filters.push(ilike(sets.title, `%${escapeLike(query.q)}%`))
+  const filters: (SQL | undefined)[] = [eq(sets.ownerId, user.id)]
+  if (query.q) filters.push(searchCondition(db, query.q))
   if (query.folder === 'none') filters.push(isNull(sets.folderId))
   else if (query.folder) filters.push(eq(sets.folderId, query.folder))
   // Plusieurs tags : le set doit les porter tous.

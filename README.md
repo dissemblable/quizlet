@@ -12,6 +12,8 @@ Authelia, en forward-auth).
   éditeur sur une seule page permet d'ajouter, modifier, supprimer et réordonner les cartes.
 - **Bibliothèque** : mes sets et leur nombre de cartes, paginés, filtrés par dossier (« Tous »,
   « Sans dossier » ou un dossier) et par tags, avec recherche.
+- **Recherche globale** (V2) : Ctrl+K (Cmd+K sur Mac) depuis n'importe quelle page cherche dans le
+  titre, la description, les tags et le contenu des cartes de mes sets.
 - **Dossiers et tags** (V2) : dossiers à plat (un seul niveau) créés, renommés et supprimés depuis
   la bibliothèque, où le menu de chaque set permet de le ranger. Tags propres à chaque utilisateur,
   créés à la volée dans l'éditeur (10 par set au plus) et supprimables depuis la bibliothèque.
@@ -131,7 +133,7 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 |---|---|
 | `GET /health` | Sans identité (healthcheck Docker) |
 | `GET /me` | Utilisateur courant et `logoutUrl` |
-| `GET /sets?q=&folder=&tags=&page=` | Ma bibliothèque, 24 sets par page : `{ sets, total, page, pageSize }`. `folder` vaut un identifiant ou `none` ; `tags` liste des identifiants séparés par des virgules |
+| `GET /sets?q=&folder=&tags=&page=` | Ma bibliothèque, 24 sets par page : `{ sets, total, page, pageSize }`. `q` cherche dans le titre, la description, les tags et les cartes ; `folder` vaut un identifiant ou `none` ; `tags` liste des identifiants séparés par des virgules |
 | `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées, tags facultatifs) |
 | `GET /sets/:id` | Auteur, ou n'importe quel utilisateur si le set est public |
 | `PUT /sets/:id` | Auteur seul : remplace métadonnées et cartes en une transaction (tags remplacés s'ils sont fournis) |
@@ -399,9 +401,15 @@ en production.
   définitions *différentes*. La réponse attendue (`answerIndex`) est envoyée avec les questions et
   le score est calculé dans le navigateur : c'est un outil de révision personnelle, pas un examen.
   Chaque « Nouveau quiz » demande un nouveau tirage. Raccourcis : touches 1 à 4.
-- Bibliothèque : la recherche porte sur le titre, sans tenir compte de la casse (`ILIKE`, jokers
-  `%` et `_` échappés), mais en tenant compte des accents. La bibliothèque ne liste que ses propres
-  sets : un set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.
+- Recherche (bibliothèque et palette Ctrl/Cmd+K, une seule requête côté API) : titre,
+  description, tags et contenu des cartes de **mes** sets, sans tenir compte de la casse mais en
+  tenant compte des accents (`ILIKE`, jokers `%` et `_` échappés). Choix de `pg_trgm` plutôt que
+  de la recherche plein texte `french` : on trouve des morceaux de mots pendant la frappe, et des
+  contenus courts (« Fe », « Or ») que la configuration `french` écarte comme mots vides. Des index
+  GIN trigram couvrent les colonnes cherchées. La bibliothèque ne liste que ses propres sets : un
+  set public d'un autre utilisateur s'ouvre par son lien et peut être dupliqué.
+- Connexions Postgres de l'API avec `jit = off` : sur ces requêtes courtes, la compilation JIT
+  coûtait environ 230 ms à la recherche pour 3 ms d'exécution.
 - Front : les pages autres que la bibliothèque sont chargées à la demande, et le socle React
   (react, react-dom, react-router, TanStack Query) forme un chunk à part, qui reste en cache d'un
   déploiement à l'autre. Les constantes partagées vivent dans un module sans Zod, pour ne pas
