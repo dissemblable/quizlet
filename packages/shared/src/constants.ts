@@ -31,6 +31,11 @@ export const SETTINGS_LIMITS = {
   maxRetention: 0.99,
 } as const
 
+/** « 0,70 » : nombre à deux décimales, écrit à la française. */
+function frenchDecimal(value: number): string {
+  return value.toFixed(2).replace('.', ',')
+}
+
 /** États FSRS d'une carte pour un utilisateur (`new` : jamais révisée). */
 export const CARD_STATES = ['new', 'learning', 'review', 'relearning'] as const
 export type CardState = (typeof CARD_STATES)[number]
@@ -72,5 +77,5 @@ export const MESSAGES = {
   noCardToImport: 'Aucune carte valide à importer',
   timezoneInvalid: 'Fuseau horaire inconnu',
   perDayInvalid: `Choisissez un nombre entier entre 0 et ${SETTINGS_LIMITS.perDay}`,
-  retentionInvalid: `La rétention cible doit être comprise entre ${SETTINGS_LIMITS.minRetention} et ${SETTINGS_LIMITS.maxRetention}`,
+  retentionInvalid: `La rétention cible doit être comprise entre ${frenchDecimal(SETTINGS_LIMITS.minRetention)} et ${frenchDecimal(SETTINGS_LIMITS.maxRetention)}`,
 } as const

@@ -71,9 +71,14 @@ function Review({ set }: { set?: SetDetail }) {
           title="Rien à réviser pour le moment"
           description="Les cartes dues et les nouvelles cartes du jour (selon vos limites quotidiennes) ont toutes été vues. Revenez plus tard."
           action={
-            <Button asChild variant="outline">
-              <Link to={back.to}>Retour</Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild variant="outline">
+                <Link to={back.to}>Retour</Link>
+              </Button>
+              <Button asChild variant="ghost">
+                <Link to="/settings">Modifier mes limites</Link>
+              </Button>
+            </div>
           }
         />
       ) : (

@@ -16,6 +16,9 @@ Authelia, en forward-auth).
   l'en-tête, bandeau sur l'accueil) et « Répétition espacée » sur chaque set. La carte se retourne
   avec Espace, et quatre notes (À revoir, Difficile, Bien, Facile, touches 1 à 4) affichent chacune
   l'intervalle prévu. Voir [Répétition espacée (FSRS)](#répétition-espacée-fsrs).
+- **Paramètres** (V2, menu utilisateur) : nouvelles cartes par jour (20 par défaut), révisions par
+  jour (200), fuseau horaire (`Europe/Paris` par défaut, puis celui du navigateur, enregistré
+  automatiquement à la première visite) et rétention cible FSRS (0,9).
 - **Recherche globale** (V2) : Ctrl+K (Cmd+K sur Mac) depuis n'importe quelle page cherche dans le
   titre, la description, les tags et le contenu des cartes de mes sets.
 - **Import CSV / copier-coller** (V2) : depuis « Nouveau set » ou un set existant (« Importer des
