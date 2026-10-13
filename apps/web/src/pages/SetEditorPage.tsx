@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LIMITS } from '@quizlet/shared'
-import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon } from 'lucide-react'
+import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon, UploadIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
@@ -137,9 +137,17 @@ function SetEditor({ set, initialValues }: { set?: SetDetail; initialValues: Set
       <title>{pageTitle(set ? `Modifier « ${set.title} »` : 'Nouveau set')}</title>
       <UnsavedChangesGuard when={isDirty && !isSubmitting} allowLeave={allowLeave} />
 
-      <h1 id="editor-title" className="mb-8 text-2xl font-semibold tracking-tight">
-        {set ? 'Modifier le set' : 'Nouveau set'}
-      </h1>
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-2">
+        <h1 id="editor-title" className="text-2xl font-semibold tracking-tight">
+          {set ? 'Modifier le set' : 'Nouveau set'}
+        </h1>
+        <Button asChild variant="outline" size="sm">
+          <Link to={set ? `/sets/${set.id}/import` : '/import'}>
+            <UploadIcon />
+            Importer des cartes
+          </Link>
+        </Button>
+      </div>
 
       <FieldGroup>
         <Field data-invalid={Boolean(errors.title)}>

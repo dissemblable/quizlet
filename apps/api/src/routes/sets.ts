@@ -1,6 +1,14 @@
-import { moveSetSchema, setIdParamSchema, setInputSchema, setsQuerySchema } from '@quizlet/shared'
+import {
+  importInputSchema,
+  importNewSetSchema,
+  moveSetSchema,
+  setIdParamSchema,
+  setInputSchema,
+  setsQuerySchema,
+} from '@quizlet/shared'
 import { Hono } from 'hono'
 import type { Db } from '../db/client'
+import { importIntoNewSet, importIntoSet } from '../services/import'
 import { getQuiz } from '../services/quiz'
 import {
   createSet,
@@ -22,6 +30,9 @@ export function setsRoutes(db: Db) {
     .post('/', validate('json', setInputSchema), async (c) => {
       const set = await createSet(db, c.get('user'), c.req.valid('json'))
       return c.json({ set }, 201)
+    })
+    .post('/import', validate('json', importNewSetSchema), async (c) => {
+      return c.json(await importIntoNewSet(db, c.get('user'), c.req.valid('json')), 201)
     })
     .get('/:id', validate('param', setIdParamSchema), async (c) => {
       const set = await getSet(db, c.req.valid('param').id, c.get('user'))
@@ -48,6 +59,15 @@ export function setsRoutes(db: Db) {
         const { folderId } = c.req.valid('json')
         await moveSet(db, c.req.valid('param').id, c.get('user'), folderId)
         return c.body(null, 204)
+      },
+    )
+    .post(
+      '/:id/import',
+      validate('param', setIdParamSchema),
+      validate('json', importInputSchema),
+      async (c) => {
+        const { id } = c.req.valid('param')
+        return c.json(await importIntoSet(db, c.get('user'), id, c.req.valid('json')))
       },
     )
     .post('/:id/duplicate', validate('param', setIdParamSchema), async (c) => {

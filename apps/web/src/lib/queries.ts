@@ -1,4 +1,4 @@
-import type { SetInput } from '@quizlet/shared'
+import type { ImportSeparators, SetInput } from '@quizlet/shared'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { api } from './api'
@@ -147,6 +147,29 @@ export function useDuplicateSet() {
     mutationFn: async (id: string) =>
       (await unwrap(api.sets[':id'].duplicate.$post({ param: { id } }))).set,
     onSuccess: cache.store,
+  })
+}
+
+interface ImportRequest {
+  /** Titre du nouveau set (ignoré pour un import dans un set existant). */
+  title: string
+  text: string
+  separators: ImportSeparators
+}
+
+/** Import dans un set existant (`setId`) ou dans un nouveau set. L'API découpe le texte. */
+export function useImportCards(setId?: string) {
+  const queryClient = useQueryClient()
+  const invalidateLibrary = useInvalidateLibrary()
+  return useMutation({
+    mutationFn: ({ title, text, separators }: ImportRequest) =>
+      setId
+        ? unwrap(api.sets[':id'].import.$post({ param: { id: setId }, json: { text, separators } }))
+        : unwrap(api.sets.import.$post({ json: { title, text, separators } })),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.set(result.set.id) })
+      invalidateLibrary()
+    },
   })
 }
 

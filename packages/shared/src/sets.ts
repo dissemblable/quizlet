@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { LIMITS, MESSAGES, VISIBILITIES } from './constants'
+import { IMPORT_MAX_BYTES, LIMITS, MESSAGES, VISIBILITIES } from './constants'
+import { utf8Size } from './import'
 
 export const visibilitySchema = z.enum(VISIBILITIES)
 
@@ -78,3 +79,19 @@ export const folderInputSchema = z.object({ name: folderNameSchema })
 
 /** Déplacement d'un set : `null` le sort de son dossier. */
 export const moveSetSchema = z.object({ folderId: z.uuid().nullable() })
+
+const separatorSchema = z
+  .string()
+  .min(1, MESSAGES.separatorRequired)
+  .max(10, MESSAGES.separatorTooLong)
+
+/** Import : le texte brut et ses séparateurs. L'API découpe elle-même le texte (`parseCards`). */
+export const importInputSchema = z.object({
+  text: z.string().refine((text) => utf8Size(text) <= IMPORT_MAX_BYTES, MESSAGES.importTooLarge),
+  separators: z
+    .object({ term: separatorSchema, card: separatorSchema })
+    .refine(({ term, card }) => term !== card, MESSAGES.separatorsMustDiffer),
+})
+
+/** Import dans un nouveau set (privé) : son titre en plus. */
+export const importNewSetSchema = importInputSchema.extend({ title: titleSchema })

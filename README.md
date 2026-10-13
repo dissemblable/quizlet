@@ -14,6 +14,8 @@ Authelia, en forward-auth).
   « Sans dossier » ou un dossier) et par tags, avec recherche.
 - **Recherche globale** (V2) : Ctrl+K (Cmd+K sur Mac) depuis n'importe quelle page cherche dans le
   titre, la description, les tags et le contenu des cartes de mes sets.
+- **Import CSV / copier-coller** (V2) : depuis « Nouveau set » ou un set existant (« Importer des
+  cartes »). Voir [Import de cartes](#import-de-cartes).
 - **Dossiers et tags** (V2) : dossiers à plat (un seul niveau) créés, renommés et supprimés depuis
   la bibliothèque, où le menu de chaque set permet de le ranger. Tags propres à chaque utilisateur,
   créés à la volée dans l'éditeur (10 par set au plus) et supprimables depuis la bibliothèque.
@@ -141,6 +143,8 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | `PUT /sets/:id/folder` | Auteur seul : `{ folderId }` range le set dans l'un de ses dossiers, `null` l'en sort |
 | `POST /sets/:id/duplicate` | Quiconque peut lire le set : crée une copie privée « … (copie) » |
 | `GET /sets/:id/quiz` | Quiconque peut lire le set : un QCM par carte (422 s'il a moins de 4 définitions différentes) |
+| `POST /sets/import` | Crée un set privé `{ title }` à partir de `{ text, separators: { term, card } }` : `{ set, imported, skipped }` |
+| `POST /sets/:id/import` | Auteur seul (404 / 403 sinon) : ajoute les cartes importées à la fin du set |
 | `GET /folders`, `POST /folders` | Mes dossiers (avec leur nombre de sets) ; création |
 | `PATCH /folders/:id`, `DELETE /folders/:id` | Propriétaire seul (404 sinon) : renommage, suppression |
 | `GET /tags`, `DELETE /tags/:id` | Mes tags (avec leur nombre de sets) ; suppression par le propriétaire seul (404 sinon) |
@@ -160,6 +164,32 @@ Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts
 
 Choix simple : le CRUD des cartes passe par l'éditeur du set (une page, un enregistrement atomique)
 plutôt que par une route par carte. Cela réduit la surface où vérifier les permissions.
+
+## Import de cartes
+
+La page d'import (`/import` pour un nouveau set, `/sets/:id/import` pour un set existant) accepte
+un texte collé (Excel, Google Sheets, export Quizlet…) ou un fichier `.csv` / `.txt` encodé en
+UTF-8 (1 Mo au plus, 1 000 000 octets ; un fichier dans un autre encodage est refusé, pas
+« deviné »).
+
+- **Séparateurs** : entre le terme et la définition (tabulation, virgule, point-virgule ou
+  personnalisé) et entre les cartes (nouvelle ligne ou personnalisé ; `\n` et `\t` sont acceptés
+  dans un séparateur personnalisé). Par défaut, la détection automatique choisit la tabulation si
+  le texte en contient, sinon le point-virgule ou la virgule (celui présent sur le plus de lignes).
+- **Format** : chaque carte est coupée au premier séparateur de terme, la suite forme la
+  définition. Les champs entre guillemets peuvent contenir les séparateurs et des retours à la
+  ligne (`""` pour un guillemet), comme dans un CSV d'Excel ou un copier-coller de Sheets.
+- **Aperçu** : calculé dans le navigateur à chaque modification du texte ou des séparateurs. Il
+  liste les cartes détectées et signale les lignes invalides (terme ou définition vide, ou trop
+  long). Les lignes vides sont ignorées sans être signalées.
+- **Import** : l'API reçoit le texte brut et les séparateurs, et découpe elle-même le texte avec le
+  même code (`packages/shared/src/import.ts`) : rien de ce que le client a découpé n'est repris tel
+  quel. Les lignes invalides sont ignorées (leur nombre est renvoyé). Tout se fait en une
+  transaction, avec 2000 cartes au plus par import et par set. Un nouveau set importé est privé ;
+  un import dans un set existant ajoute les cartes à la fin.
+
+La limite de 1 Mo laisse de la marge sous celle des requêtes (1 Mio, côté API comme côté nginx),
+même avec l'encodage JSON du texte.
 
 ## Variables d'environnement (API)
 
@@ -430,6 +460,9 @@ Choix de la V2 :
   depuis la bibliothèque ; il ne se renomme pas. Les noms de dossier, eux, peuvent se répéter.
 - Dupliquer un set ne copie ni ses tags, ni son dossier, ni la progression : la copie repart de
   zéro.
+- Un set contient 2000 cartes au plus (500 en V1), la même limite que pour un import. L'éditeur
+  reste sur une seule page : il devient plus lent sur les très gros sets, et un set de 2000 cartes
+  très longues peut dépasser la limite de 1 Mio par requête à l'enregistrement.
 
 ## Tests
 

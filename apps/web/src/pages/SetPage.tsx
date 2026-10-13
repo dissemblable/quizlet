@@ -7,6 +7,7 @@ import {
   Loader2Icon,
   PencilIcon,
   PlusIcon,
+  UploadIcon,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -135,6 +136,14 @@ function SetOverview({ set }: { set: SetDetail }) {
           <Button variant="outline" onClick={copyLink}>
             <LinkIcon />
             Copier le lien
+          </Button>
+        )}
+        {set.isOwner && (
+          <Button asChild variant="outline">
+            <Link to={`/sets/${set.id}/import`}>
+              <UploadIcon />
+              Importer des cartes
+            </Link>
           </Button>
         )}
         {set.isOwner && <DeleteSetDialog setId={set.id} title={set.title} />}

@@ -9,12 +9,15 @@ export const LIMITS = {
   description: 1000,
   term: 500,
   definition: 1000,
-  cards: 500,
+  cards: 2000,
   search: 100,
   folderName: 60,
   tagName: 30,
   tagsPerSet: 10,
 } as const
+
+/** Taille maximale d'un texte ou d'un fichier importé, en octets UTF-8 (1 Mo). */
+export const IMPORT_MAX_BYTES = 1_000_000
 
 /** Nombre de sets par page dans la bibliothèque. */
 export const LIBRARY_PAGE_SIZE = 24
@@ -39,4 +42,9 @@ export const MESSAGES = {
   tagRequired: 'Un tag ne peut pas être vide',
   tagTooLong: `Un tag ne peut pas dépasser ${LIMITS.tagName} caractères`,
   tooManyTags: `Un set ne peut pas avoir plus de ${LIMITS.tagsPerSet} tags`,
+  importTooLarge: 'Le texte à importer ne peut pas dépasser 1 Mo',
+  separatorRequired: 'Choisissez un séparateur',
+  separatorTooLong: 'Un séparateur ne peut pas dépasser 10 caractères',
+  separatorsMustDiffer: 'Les séparateurs de terme et de carte doivent être différents',
+  noCardToImport: 'Aucune carte valide à importer',
 } as const
