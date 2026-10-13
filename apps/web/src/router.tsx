@@ -46,6 +46,10 @@ export const router = createBrowserRouter([
         path: 'sets/:id/quiz',
         lazy: async () => ({ Component: (await import('@/pages/QuizPage')).QuizPage }),
       },
+      {
+        path: 'sets/:id/write',
+        lazy: async () => ({ Component: (await import('@/pages/WritePage')).WritePage }),
+      },
       { path: '*', Component: NotFoundPage },
     ],
   },

@@ -6,6 +6,7 @@ import {
   ListChecksIcon,
   Loader2Icon,
   PencilIcon,
+  PenLineIcon,
   PlusIcon,
   UploadIcon,
 } from 'lucide-react'
@@ -115,6 +116,15 @@ function SetOverview({ set }: { set: SetDetail }) {
             countDistinctDefinitions(set.cards) < QUIZ_MIN_CARDS
               ? `Il faut au moins ${QUIZ_MIN_CARDS} cartes aux définitions différentes.`
               : undefined
+          }
+        />
+        <StudyModeLink
+          to={`/sets/${set.id}/write`}
+          icon={<PenLineIcon />}
+          title="Mode écrit"
+          description="Tapez la réponse, corrigée avec tolérance."
+          unavailableReason={
+            set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
           }
         />
       </div>

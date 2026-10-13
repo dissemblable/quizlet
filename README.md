@@ -16,6 +16,9 @@ Authelia, en forward-auth).
   titre, la description, les tags et le contenu des cartes de mes sets.
 - **Import CSV / copier-coller** (V2) : depuis « Nouveau set » ou un set existant (« Importer des
   cartes »). Voir [Import de cartes](#import-de-cartes).
+- **Mode écrit** (V2) : le terme (ou la définition, ou l'un ou l'autre au hasard) est affiché, on
+  tape la réponse. Correction tolérante, bouton « J'avais raison » après une erreur, mélange en
+  option, et récapitulatif avec le score et les erreurs. Indépendant de la répétition espacée.
 - **Dossiers et tags** (V2) : dossiers à plat (un seul niveau) créés, renommés et supprimés depuis
   la bibliothèque, où le menu de chaque set permet de le ranger. Tags propres à chaque utilisateur,
   créés à la volée dans l'éditeur (10 par set au plus) et supprimables depuis la bibliothèque.
@@ -463,6 +466,12 @@ Choix de la V2 :
 - Un set contient 2000 cartes au plus (500 en V1), la même limite que pour un import. L'éditeur
   reste sur une seule page : il devient plus lent sur les très gros sets, et un set de 2000 cartes
   très longues peut dépasser la limite de 1 Mio par requête à l'enregistrement.
+- Mode écrit : la réponse et la réponse attendue sont comparées sans casse, sans accents, sans
+  ponctuation (remplacée par une espace) et sans espaces superflus. Il tolère ensuite une faute de
+  frappe (distance de Levenshtein) par tranche de 5 caractères de la réponse attendue : aucune sur
+  « Rome », une sur « Paris ». Une réponse acceptée avec des fautes affiche la bonne orthographe.
+  « Je ne sais pas » montre la réponse et compte une erreur. Tout se passe dans le navigateur,
+  sans rien enregistrer.
 
 ## Tests
 
