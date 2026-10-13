@@ -39,7 +39,8 @@ Authelia, en forward-auth).
   duplicables dans sa propre bibliothèque. Seul leur auteur peut les modifier.
 
 Interface en français, responsive (pensée d'abord pour le mobile), thème clair ou sombre, et
-navigation au clavier.
+navigation au clavier. La touche `?` (ou l'icône clavier de l'en-tête) affiche l'aide de tous les
+raccourcis.
 
 ## Prérequis
 
@@ -53,7 +54,7 @@ navigation au clavier.
 docker compose up -d db     # PostgreSQL 17 sur 127.0.0.1:5433 (bases quizlet et quizlet_test)
 pnpm install
 pnpm db:migrate             # applique les migrations versionnées (apps/api/drizzle)
-pnpm db:seed                # facultatif : utilisateur « demo » et 3 sets d'exemple
+pnpm db:seed                # facultatif : « demo », 3 sets, dossiers, tags, révisions en cours
 pnpm dev                    # front sur http://localhost:5180, API sur http://127.0.0.1:3000
 ```
 
@@ -70,21 +71,23 @@ apps/
     src/app.ts              assemblage des middlewares et routes, export du type AppType
     src/env.ts              configuration validée par Zod (refus de démarrer si invalide)
     src/middleware/         identité SSO, proxys de confiance, garde CSRF
-    src/routes/             /api/me, /api/sets (CRUD, duplication, quiz)
+    src/routes/             /api/me, /sets (CRUD, import, quiz…), /folders, /tags, /review, /settings
     src/services/           accès aux données et contrôles de propriété
-    src/domain/             logique pure : permissions, génération du quiz
+    src/domain/             logique pure : permissions, génération du quiz, planification FSRS
     src/db/                 schéma Drizzle, client, migrations, seed
     Dockerfile
   web/                      Front Vite + React 19 + React Router + TanStack Query
-    src/pages/              bibliothèque, set, éditeur, flashcards, quiz
+    src/pages/              bibliothèque, set, éditeur, import, flashcards, quiz, mode écrit,
+                            révision, paramètres
     src/components/         mise en page, composants métier, ui/ (shadcn/ui)
-    src/lib/                client API, requêtes, logique pure (sessions, formulaires), thème
+    src/lib/                client API, requêtes, logique pure (sessions, formulaires, mode
+                            écrit, séance de révision), thème
     nginx.conf, Dockerfile  image statique de production
 packages/
-  shared/                   schémas Zod, limites, messages, utilitaires (mélange, quiz)
-docker/                     initialisation du Postgres de dev
-docker-compose.yml          Postgres de dev (local uniquement)
-docker-compose.prod.yml     production derrière Authelia
+  shared/                   schémas Zod, limites, messages, utilitaires (mélange, quiz, import CSV)
+docker/                     initialisation du Postgres de dev, script de sauvegarde (backup/)
+docker-compose.yml          Postgres de dev, et outil de sauvegarde local (profil tools)
+docker-compose.prod.yml     production derrière Authelia, sauvegardes comprises
 ```
 
 - **pnpm workspaces** et **Turborepo** orchestrent `dev`, `build`, `lint`, `typecheck` et `test`.
@@ -531,7 +534,8 @@ en production.
   la page avec des modifications non enregistrées demande confirmation.
 - Un set dupliqué est toujours privé, quelle que soit la visibilité de l'original.
 - Flashcards : la session (position, « Je sais » / « À revoir ») vit en mémoire, dans la page.
-  Rien n'est enregistré, la répétition espacée étant hors périmètre. Activer ou désactiver le
+  Rien n'est enregistré : c'est une étude libre, sans effet sur la répétition espacée, qui a son
+  propre mode. Activer ou désactiver le
   mélange relance la session. Marquer une carte passe à la suivante. Raccourcis : Espace pour
   retourner la carte, ← et → pour naviguer (désactivés pendant une saisie ; sur un bouton, Espace
   active le bouton).
@@ -589,9 +593,14 @@ pnpm test
 
 | Package | Ce qui est testé |
 |---|---|
-| `apps/api` | Middleware d'identité : proxy de confiance ou non, en-têtes forgés, `X-Forwarded-For` ignoré, UTF-8, mode dev. Configuration : refus du mode dev en production, variables obligatoires. Upsert et cache des utilisateurs. Permissions sur les sets (lecture, écriture, suppression, duplication, carte d'un autre set). Recherche (jokers échappés). Génération du quiz (graine déterministe, distracteurs distincts, minimum de cartes). Garde CSRF, en-têtes de sécurité, CORS |
-| `apps/web` | Logique pure : session de flashcards (progression, marquage, mélange), score du quiz, formulaire d'édition, client HTTP (session expirée), raccourcis clavier. Tests de rendu (jsdom) des parcours : bibliothèque, création et édition, page d'un set, flashcards, quiz |
-| `packages/shared` | Mélange de Fisher-Yates, générateur pseudo-aléatoire, schémas Zod, normalisation des réponses |
+| `apps/api` | Middleware d'identité : proxy de confiance ou non, en-têtes forgés, `X-Forwarded-For` ignoré, UTF-8, mode dev. Configuration : refus du mode dev en production, variables obligatoires. Upsert et cache des utilisateurs. Permissions sur les sets (lecture, écriture, suppression, duplication, carte d'un autre set). Génération du quiz (graine déterministe, distracteurs distincts, minimum de cartes). Garde CSRF, en-têtes de sécurité, CORS. **V2** : migration d'une base V1 avec données ; dossiers et tags (CRUD, filtres en ET, pagination, isolation entre utilisateurs, confidentialité sur un set public) ; recherche (titre, description, tags, cartes, jokers échappés) ; import (séparateurs, guillemets, lignes invalides, limites de 2000 cartes et de 1 Mo, sets d'autrui) ; FSRS (note → nouvelle échéance, étapes d'apprentissage, rétention, aller-retour avec la base) ; file du jour (limites quotidiennes, minuit dans le fuseau de l'utilisateur, Paris et New York) ; permissions de la révision ; progression conservée à la modification d'une carte, supprimée avec elle, remise à zéro par la duplication ; paramètres ; seed |
+| `apps/web` | Logique pure : session de flashcards (progression, marquage, mélange), score du quiz, formulaire d'édition, client HTTP (session expirée), raccourcis clavier, filtres de la bibliothèque, comparaison tolérante et session du mode écrit, séance de révision et format des intervalles. Tests de rendu (jsdom) des parcours : bibliothèque (dossiers, tags, pagination, déplacement), création et édition (tags), page d'un set, flashcards, quiz, recherche Ctrl+K, import, mode écrit, révision, paramètres, aide `?` |
+| `packages/shared` | Mélange de Fisher-Yates, générateur pseudo-aléatoire, schémas Zod (dont paramètres et notes), normalisation des réponses, parsing de l'import et détection des séparateurs |
+
+Le script de sauvegarde (`docker/backup/backup.sh`) a été testé à la main contre la base de dev :
+sauvegarde, vérification, restauration (confirmée, annulée, archive corrompue, sauvegarde V1 puis
+migrations), rotation, démon (heure planifiée, sauvegarde au démarrage, arrêt propre) et
+healthcheck, avec les mêmes restrictions qu'en production.
 
 ## Dépannage
 

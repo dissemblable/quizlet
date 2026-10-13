@@ -35,6 +35,14 @@ describe('shouldIgnoreShortcut', () => {
     expect(shouldIgnoreShortcut(keyEvent('ArrowRight', button))).toBe(false)
   })
 
+  it('ignore les touches pressées dans une fenêtre ou un menu ouvert', () => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const close = document.createElement('button')
+    dialog.append(close)
+    expect(shouldIgnoreShortcut(keyEvent('1', close))).toBe(true)
+  })
+
   it('ignore les combinaisons avec une touche de modification', () => {
     expect(shouldIgnoreShortcut(keyEvent('ArrowLeft', document.body, { altKey: true }))).toBe(true)
     expect(shouldIgnoreShortcut(keyEvent('ArrowLeft', document.body, { metaKey: true }))).toBe(true)

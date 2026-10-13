@@ -44,6 +44,17 @@ describe('App', () => {
     expect(document.activeElement?.id).toBe('contenu')
   })
 
+  it('ouvre l’aide des raccourcis clavier avec « ? »', async () => {
+    mockApi({ 'GET /api/me': { body: demoMe } })
+    const user = userEvent.setup()
+    await renderApp('/nimporte/quoi')
+    await screen.findByRole('heading', { name: 'Page introuvable' })
+
+    await user.keyboard('?')
+    const dialog = await screen.findByRole('dialog', { name: 'Raccourcis clavier' })
+    expect(dialog.textContent).toContain('Noter : À revoir, Difficile, Bien, Facile')
+  })
+
   it('affiche une page introuvable pour une adresse inconnue', async () => {
     mockApi({ 'GET /api/me': { body: demoMe } })
     await renderApp('/nimporte/quoi')

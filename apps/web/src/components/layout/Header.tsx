@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { APP_NAME } from '@/config'
 import { ReviewLink } from './ReviewLink'
 import { SearchDialog } from './SearchDialog'
+import { ShortcutsDialog } from './ShortcutsDialog'
 import { ThemeToggle } from './ThemeToggle'
 import { UserMenu } from './UserMenu'
 
@@ -42,6 +43,7 @@ export function Header() {
               <span className="sr-only sm:not-sr-only">Nouveau set</span>
             </Link>
           </Button>
+          <ShortcutsDialog />
           <ThemeToggle />
           <UserMenu />
         </div>
