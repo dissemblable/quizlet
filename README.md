@@ -101,10 +101,21 @@ docker-compose.prod.yml     production derrière Authelia
 | Table | Contenu |
 |---|---|
 | `users` | Utilisateurs vus par le SSO. `username` (= `Remote-User`) est l'identifiant stable |
-| `sets` | Sets de cartes : titre, description, visibilité (`private` / `public`), propriétaire |
+| `sets` | Sets de cartes : titre, description, visibilité (`private` / `public`), propriétaire, dossier |
 | `cards` | Cartes d'un set : terme, définition, position |
+| `folders` | Dossiers d'un utilisateur, à plat (un seul niveau) |
+| `tags`, `set_tags` | Tags d'un utilisateur (nom unique sans tenir compte de la casse) et leurs sets |
+| `card_reviews` | Progression FSRS par utilisateur et par carte (échéance, stabilité, difficulté, état…) |
+| `review_logs` | Historique des révisions, conservé pour de futures statistiques |
+| `user_settings` | Paramètres de révision (fuseau horaire, limites quotidiennes, rétention cible) |
 
-Les identifiants sont des UUID. Supprimer un utilisateur ou un set supprime ce qui en dépend.
+Les identifiants sont des UUID. Supprimer un utilisateur, un set ou une carte supprime ce qui en
+dépend (progression comprise). Supprimer un dossier ne supprime pas ses sets : ils repassent
+« sans dossier ».
+
+Les migrations sont uniquement additives : `0001_v2` ajoute les tables de la V2 sans toucher aux
+données de la V1, ce que vérifie `src/db/migrate.test.ts` (une base V1 avec des données, puis la
+suite des migrations). Elle active aussi l'extension `pg_trgm`, qui indexe la recherche.
 
 ## API
 

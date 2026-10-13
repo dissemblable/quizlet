@@ -1,5 +1,5 @@
 import { COPY_SUFFIX, LIMITS, type setInputSchema, type Visibility } from '@quizlet/shared'
-import { and, asc, count, desc, eq, ilike } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, notInArray, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { Db } from '../db/client'
 import { cards, type SetRow, sets, type User, users } from '../db/schema'
@@ -142,28 +142,41 @@ export function createSet(db: Db, user: User, data: SetData): Promise<SetDetail>
 
 /**
  * Remplace la liste ordonnée des cartes d'un set. Une carte dont l'identifiant appartient déjà à
- * ce set garde son identifiant ; tout autre identifiant (inconnu, ou carte d'un autre set) est
- * ignoré et la carte est créée comme nouvelle. Aucune carte d'un autre set n'est jamais touchée.
+ * ce set est modifiée sur place : elle garde son identifiant, donc sa progression de révision.
+ * Tout autre identifiant (inconnu, ou carte d'un autre set) est ignoré et la carte est créée comme
+ * nouvelle. Aucune carte d'un autre set n'est jamais touchée.
  */
 async function replaceCards(tx: Tx, setId: string, list: SetData['cards']) {
-  const existing = await tx
-    .select({ id: cards.id, createdAt: cards.createdAt })
-    .from(cards)
-    .where(eq(cards.setId, setId))
-  const createdAtById = new Map(existing.map((card) => [card.id, card.createdAt]))
-
-  await tx.delete(cards).where(eq(cards.setId, setId))
-  if (list.length === 0) return
+  const existing = await tx.select({ id: cards.id }).from(cards).where(eq(cards.setId, setId))
+  const existingIds = new Set(existing.map((card) => card.id))
 
   const kept = new Set<string>()
-  await tx.insert(cards).values(
-    list.map(({ id, term, definition }, position) => {
-      const createdAt = id === undefined || kept.has(id) ? undefined : createdAtById.get(id)
-      if (id === undefined || createdAt === undefined) return { setId, term, definition, position }
-      kept.add(id)
-      return { id, createdAt, setId, term, definition, position }
-    }),
-  )
+  const rows = list.map(({ id, term, definition }, position) => {
+    if (id === undefined || !existingIds.has(id) || kept.has(id)) {
+      return { setId, term, definition, position }
+    }
+    kept.add(id)
+    return { id, setId, term, definition, position }
+  })
+
+  // Cartes retirées de la liste : supprimées, avec leur progression (cascade).
+  await tx.delete(cards).where(and(eq(cards.setId, setId), notInArray(cards.id, [...kept])))
+  if (rows.length === 0) return
+
+  await tx
+    .insert(cards)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: cards.id,
+      set: {
+        term: sql`excluded.term`,
+        definition: sql`excluded.definition`,
+        position: sql`excluded.position`,
+        updatedAt: sql`now()`,
+      },
+      // Jamais une carte d'un autre set ; pas d'écriture si la carte n'a pas changé.
+      setWhere: sql`${cards.setId} = ${setId} AND (${cards.term}, ${cards.definition}, ${cards.position}) IS DISTINCT FROM (excluded.term, excluded.definition, excluded.position)`,
+    })
 }
 
 export function updateSet(db: Db, id: string, user: User, data: SetData): Promise<SetDetail> {
