@@ -11,7 +11,8 @@ import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { pageTitle } from '@/config'
 import { pluralize } from '@/lib/format'
-import type { SetDetail } from '@/lib/queries'
+import { errorMessage } from '@/lib/http'
+import { type SetDetail, useDueCardIds } from '@/lib/queries'
 import { verdict } from '@/lib/quiz'
 import {
   buildQuestions,
@@ -55,13 +56,17 @@ const DIRECTIONS: ReadonlyArray<{ value: WriteDirection; label: string }> = [
 
 function WriteMode({ set }: { set: SetDetail }) {
   const [options, setOptions] = useState<WriteOptions>({ direction: 'term', shuffle: false })
+  // « À revoir » : cartes dues aujourd'hui selon FSRS, lues sans modifier la planification.
+  const [onlyDue, setOnlyDue] = useState(false)
+  const due = useDueCardIds(set.id, onlyDue)
+  const pool = onlyDue ? set.cards.filter((card) => due.data?.includes(card.id)) : set.cards
   // Un nouveau tirage (ordre, sens) à chaque départ ; `round` remonte la session.
   const [session, setSession] = useState<{ round: number; questions: WriteQuestion[] } | null>(null)
 
   function start() {
     setSession((previous) => ({
       round: (previous?.round ?? 0) + 1,
-      questions: buildQuestions(set.cards, options),
+      questions: buildQuestions(pool, options),
     }))
   }
 
@@ -86,23 +91,39 @@ function WriteMode({ set }: { set: SetDetail }) {
           onChangeOptions={() => setSession(null)}
         />
       ) : (
-        <WriteSetup set={set} options={options} onChange={setOptions} onStart={start} />
+        <WriteSetup
+          options={options}
+          onChange={setOptions}
+          onlyDue={onlyDue}
+          onOnlyDueChange={setOnlyDue}
+          due={due}
+          count={pool.length}
+          onStart={start}
+        />
       )}
     </div>
   )
 }
 
 function WriteSetup({
-  set,
   options,
   onChange,
+  onlyDue,
+  onOnlyDueChange,
+  due,
+  count,
   onStart,
 }: {
-  set: SetDetail
   options: WriteOptions
   onChange: (options: WriteOptions) => void
+  onlyDue: boolean
+  onOnlyDueChange: (onlyDue: boolean) => void
+  due: ReturnType<typeof useDueCardIds>
+  /** Cartes retenues pour la session. */
+  count: number
   onStart: () => void
 }) {
+  const loadingDue = onlyDue && due.isPending
   return (
     <section aria-labelledby="write-setup-title" className="rounded-2xl border bg-card p-6 sm:p-8">
       <h2 id="write-setup-title" className="text-xl font-semibold tracking-tight">
@@ -136,10 +157,28 @@ function WriteSetup({
         />
         Mélanger les cartes
       </Label>
+      <Label className="mt-3 font-normal">
+        <Checkbox
+          checked={onlyDue}
+          onCheckedChange={(checked) => onOnlyDueChange(checked === true)}
+        />
+        Seulement les cartes à revoir aujourd'hui (répétition espacée)
+      </Label>
+      <p aria-live="polite" className="mt-2 text-sm text-muted-foreground">
+        {!onlyDue
+          ? null
+          : due.isError
+            ? errorMessage(due.error)
+            : loadingDue
+              ? 'Recherche des cartes à revoir…'
+              : count === 0
+                ? "Aucune carte de ce set n'est à revoir aujourd'hui."
+                : `${pluralize(count, 'carte à revoir', 'cartes à revoir')} aujourd'hui.`}
+      </p>
 
-      <Button className="mt-8" onClick={onStart}>
+      <Button className="mt-6" onClick={onStart} disabled={loadingDue || count === 0}>
         <PenLineIcon />
-        Commencer ({pluralize(set.cards.length, 'carte')})
+        Commencer ({pluralize(count, 'carte')})
       </Button>
     </section>
   )

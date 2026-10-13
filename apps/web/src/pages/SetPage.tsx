@@ -1,5 +1,6 @@
 import { countDistinctDefinitions, QUIZ_MIN_CARDS } from '@quizlet/shared'
 import {
+  BrainIcon,
   CopyIcon,
   LayersIcon,
   LinkIcon,
@@ -98,6 +99,15 @@ function SetOverview({ set }: { set: SetDetail }) {
       </header>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <StudyModeLink
+          to={`/sets/${set.id}/review`}
+          icon={<BrainIcon />}
+          title="Répétition espacée"
+          description="Révisez chaque carte au bon moment (FSRS)."
+          unavailableReason={
+            set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
+          }
+        />
         <StudyModeLink
           to={`/sets/${set.id}/flashcards`}
           icon={<LayersIcon />}

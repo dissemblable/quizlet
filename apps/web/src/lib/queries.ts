@@ -1,4 +1,4 @@
-import type { ImportSeparators, SetInput } from '@quizlet/shared'
+import type { ImportSeparators, Rating, SetInput, SettingsInput } from '@quizlet/shared'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { api } from './api'
@@ -9,6 +9,8 @@ export type SetDetail = InferResponseType<(typeof api.sets)[':id']['$get'], 200>
 export type SetSummary = InferResponseType<typeof api.sets.$get, 200>['sets'][number]
 export type FolderSummary = InferResponseType<typeof api.folders.$get, 200>['folders'][number]
 export type TagSummary = InferResponseType<typeof api.tags.$get, 200>['tags'][number]
+export type QueueCard = InferResponseType<typeof api.review.queue.$get, 200>['cards'][number]
+export type Settings = InferResponseType<typeof api.settings.$get, 200>['settings']
 
 /** Filtres de la bibliothèque (reflétés dans l'URL). `folder` : identifiant, ou « none ». */
 export interface LibraryFilters {
@@ -28,6 +30,12 @@ export const queryKeys = {
   tags: ['tags'] as const,
   // Hors de ['sets', …] : aucune invalidation de set ne doit régénérer un quiz en cours.
   quiz: (id: string, attempt: number) => ['quiz', id, attempt] as const,
+  reviewSummary: ['review', 'summary'] as const,
+  // File figée pendant la séance (comme le quiz) : seule une nouvelle séance la recharge.
+  reviewQueue: (setId: string | undefined, attempt: number) =>
+    ['review', 'queue', setId ?? 'all', attempt] as const,
+  dueCards: (setId: string) => ['review', 'due', setId] as const,
+  settings: ['settings'] as const,
 }
 
 /** Utilisateur courant (identité SSO) et URL de déconnexion. */
@@ -73,6 +81,65 @@ export function useQuiz(id: string, attempt: number) {
     queryFn: async () => (await unwrap(api.sets[':id'].quiz.$get({ param: { id } }))).questions,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
+  })
+}
+
+/** Compteurs de la révision du jour (en-tête, accueil). */
+export function useReviewSummary() {
+  return useQuery({
+    queryKey: queryKeys.reviewSummary,
+    queryFn: () => unwrap(api.review.summary.$get()),
+  })
+}
+
+/** File de révision : tous mes sets, ou un set. Une nouvelle séance (`attempt`) la recharge. */
+export function useReviewQueue(setId: string | undefined, attempt: number) {
+  return useQuery({
+    queryKey: queryKeys.reviewQueue(setId, attempt),
+    queryFn: () => unwrap(api.review.queue.$get({ query: setId ? { setId } : {} })),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 0,
+  })
+}
+
+/** Note une carte ; les compteurs de l'en-tête suivent. */
+export function useGradeCard() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ cardId, rating }: { cardId: string; rating: Rating }) =>
+      unwrap(api.review.cards[':cardId'].$post({ param: { cardId }, json: { rating } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.reviewSummary })
+    },
+  })
+}
+
+/** Cartes d'un set dues aujourd'hui (option « à revoir » du mode écrit). */
+export function useDueCardIds(setId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.dueCards(setId),
+    queryFn: async () => (await unwrap(api.review.due.$get({ query: { setId } }))).cardIds,
+    enabled,
+  })
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: async () => (await unwrap(api.settings.$get())).settings,
+  })
+}
+
+/** Enregistre les paramètres ; la file et les compteurs du jour en dépendent. */
+export function useSaveSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (settings: SettingsInput) =>
+      (await unwrap(api.settings.$put({ json: settings }))).settings,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(queryKeys.settings, settings)
+      void queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
   })
 }
 

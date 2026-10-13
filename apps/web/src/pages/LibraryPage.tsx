@@ -3,6 +3,7 @@ import { FolderOpenIcon, LibraryIcon, PlusIcon, SearchIcon, SearchXIcon } from '
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { LibraryFilters } from '@/components/library/LibraryFilters'
+import { ReviewBanner } from '@/components/library/ReviewBanner'
 import { SetCard } from '@/components/sets/SetCard'
 import { EmptyState, ErrorState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -67,6 +68,7 @@ export function LibraryPage() {
         </div>
       </div>
 
+      <ReviewBanner />
       <LibraryFilters filters={filters} onChange={update} />
 
       {query.isPending ? (

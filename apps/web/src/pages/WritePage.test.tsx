@@ -41,6 +41,24 @@ describe('mode écrit', () => {
     expect(within(result).getByText('Bonne réponse : Madrid')).toBeTruthy()
   })
 
+  it('se limite aux cartes à revoir aujourd’hui si on le demande', async () => {
+    const set = makeSet()
+    const [, italie] = set.cards
+    mockApi({
+      'GET /api/me': { body: demoMe },
+      [`GET /api/sets/${set.id}`]: { body: { set } },
+      'GET /api/review/due': { body: { cardIds: [italie?.id] } },
+    })
+    const user = userEvent.setup()
+    await renderApp(`/sets/${set.id}/write`)
+
+    await user.click(await screen.findByRole('checkbox', { name: /Seulement les cartes à revoir/ }))
+    expect(await screen.findByText("1 carte à revoir aujourd'hui.")).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Commencer (1 carte)' }))
+    expect(screen.getByText('Italie')).toBeTruthy()
+    expect(screen.getByText('Question 1 sur 1')).toBeTruthy()
+  })
+
   it('demande le terme quand la définition est affichée', async () => {
     const set = makeSet()
     mockApi({ 'GET /api/me': { body: demoMe }, [`GET /api/sets/${set.id}`]: { body: { set } } })

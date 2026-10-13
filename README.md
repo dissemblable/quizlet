@@ -12,13 +12,18 @@ Authelia, en forward-auth).
   éditeur sur une seule page permet d'ajouter, modifier, supprimer et réordonner les cartes.
 - **Bibliothèque** : mes sets et leur nombre de cartes, paginés, filtrés par dossier (« Tous »,
   « Sans dossier » ou un dossier) et par tags, avec recherche.
+- **Répétition espacée** (V2) : « Révision du jour » (lien « Révision » avec compteur dans
+  l'en-tête, bandeau sur l'accueil) et « Répétition espacée » sur chaque set. La carte se retourne
+  avec Espace, et quatre notes (À revoir, Difficile, Bien, Facile, touches 1 à 4) affichent chacune
+  l'intervalle prévu. Voir [Répétition espacée (FSRS)](#répétition-espacée-fsrs).
 - **Recherche globale** (V2) : Ctrl+K (Cmd+K sur Mac) depuis n'importe quelle page cherche dans le
   titre, la description, les tags et le contenu des cartes de mes sets.
 - **Import CSV / copier-coller** (V2) : depuis « Nouveau set » ou un set existant (« Importer des
   cartes »). Voir [Import de cartes](#import-de-cartes).
 - **Mode écrit** (V2) : le terme (ou la définition, ou l'un ou l'autre au hasard) est affiché, on
   tape la réponse. Correction tolérante, bouton « J'avais raison » après une erreur, mélange en
-  option, et récapitulatif avec le score et les erreurs. Indépendant de la répétition espacée.
+  option, limitation possible aux cartes à revoir aujourd'hui (lues dans la planification FSRS,
+  sans la modifier), et récapitulatif avec le score et les erreurs.
 - **Dossiers et tags** (V2) : dossiers à plat (un seul niveau) créés, renommés et supprimés depuis
   la bibliothèque, où le menu de chaque set permet de le ranger. Tags propres à chaque utilisateur,
   créés à la volée dans l'éditeur (10 par set au plus) et supprimables depuis la bibliothèque.
