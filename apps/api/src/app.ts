@@ -9,8 +9,12 @@ import { errorBody, handleError } from './errors'
 import { csrfGuard } from './middleware/csrf'
 import { type ClientIpResolver, identity } from './middleware/identity'
 import { createTrustedProxyMatcher, type TrustedProxyMatcher } from './middleware/trusted-proxies'
+import { foldersRoutes } from './routes/folders'
 import { meRoutes } from './routes/me'
+import { reviewRoutes } from './routes/review'
 import { setsRoutes } from './routes/sets'
+import { settingsRoutes } from './routes/settings'
+import { tagsRoutes } from './routes/tags'
 import { createUserResolver } from './services/users'
 import type { AppEnv } from './types'
 
@@ -20,9 +24,11 @@ export interface AppDeps {
   /** Remplaçables dans les tests ; par défaut dérivés de la configuration. */
   trustedProxies?: TrustedProxyMatcher
   clientIp?: ClientIpResolver
+  /** Horloge de la planification des révisions (fixée dans les tests). */
+  now?: () => Date
 }
 
-export function createApp({ db, config, trustedProxies, clientIp }: AppDeps) {
+export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps) {
   const app = new Hono<AppEnv>().basePath('/api')
 
   app.onError(handleError)
@@ -67,6 +73,10 @@ export function createApp({ db, config, trustedProxies, clientIp }: AppDeps) {
       )
       .route('/me', meRoutes(config.logoutUrl))
       .route('/sets', setsRoutes(db))
+      .route('/folders', foldersRoutes(db))
+      .route('/tags', tagsRoutes(db))
+      .route('/review', reviewRoutes(db, now ?? (() => new Date())))
+      .route('/settings', settingsRoutes(db))
   )
 }
 

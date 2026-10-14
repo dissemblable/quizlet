@@ -1,4 +1,5 @@
-import { LogOutIcon } from 'lucide-react'
+import { LogOutIcon, SettingsIcon } from 'lucide-react'
+import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -40,6 +41,12 @@ export function UserMenu() {
           {user.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings">
+            <SettingsIcon />
+            Paramètres
+          </Link>
+        </DropdownMenuItem>
         {logoutUrl ? (
           <DropdownMenuItem asChild>
             <a href={logoutUrl}>

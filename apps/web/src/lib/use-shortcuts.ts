@@ -13,6 +13,8 @@ export function shouldIgnoreShortcut(event: {
   const target = event.target instanceof Element ? event.target : null
   // Saisie de texte : les touches gardent leur sens habituel.
   if (target?.closest('input, textarea, select, [contenteditable="true"]')) return true
+  // Fenêtre ou menu ouvert par-dessus la page : ses raccourcis ne doivent pas agir en arrière-plan.
+  if (target?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return true
   // Espace ou Entrée sur un bouton ou un lien : on laisse l'élément s'activer (évite une double action).
   if (
     (event.key === ' ' || event.key === 'Enter') &&

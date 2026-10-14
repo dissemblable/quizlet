@@ -71,6 +71,43 @@ services:
     cap_drop: [ALL]
     networks: [web]
 
+  # Sauvegardes : pg_dump quotidien (format custom), rotation, healthcheck. Script monté depuis le
+  # dépôt (aucune image à construire). Restauration et vérification : voir le README.
+  quizlet-backup:
+    <<: *defaults
+    image: postgres:17-alpine
+    container_name: quizlet-backup
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    command: ["daemon"]
+    environment:
+      PGHOST: quizlet-db
+      PGUSER: quizlet
+      PGDATABASE: quizlet
+      PGPASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+      TZ: ${TZ:-Europe/Paris}
+      BACKUP_TIME: ${BACKUP_TIME:-03:00}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./docker/backup/backup.sh:/scripts/backup.sh:ro
+      # Volume nommé par défaut, ou chemin de l'hôte (BACKUP_DIR=/opt/backups/quizlet).
+      - ${BACKUP_DIR:-quizlet-backups}:/backups
+    depends_on:
+      quizlet-db:
+        condition: service_healthy
+    # Réseau interne uniquement : le service ne parle qu'à la base.
+    networks: [quizlet-internal]
+    healthcheck:
+      # En bonne santé tant que la dernière sauvegarde a moins de 26 heures.
+      test: ["CMD-SHELL", "find /backups -maxdepth 1 -type f -name 'quizlet-*.dump' -mmin -1560 | grep -q ."]
+      interval: 1m
+      timeout: 10s
+      start_period: 2m
+      retries: 1
+
 networks:
   # Réseau du stack SSO (créé par `docker network create web`), partagé avec nginx.
   web:
@@ -80,3 +117,4 @@ networks:
 
 volumes:
   quizlet-pgdata:
+  quizlet-backups:

@@ -35,6 +35,7 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev                       # front :5180 + API :3000
 pnpm typecheck && pnpm lint && pnpm test   # à lancer avant chaque commit
 pnpm build
+pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker, ./backups
 ```
 
 ## Base de données
@@ -42,11 +43,40 @@ pnpm build
 - Drizzle ORM avec `postgres` (postgres.js). Schéma dans `apps/api/src/db/schema.ts`.
 - Pour changer le schéma : modifier `schema.ts`, lancer `pnpm db:generate`, relire le SQL dans
   `apps/api/drizzle/` et le committer. Ne jamais modifier une migration déjà committée.
-- Toutes les requêtes passent par Drizzle (jamais de SQL concaténé).
+- Toutes les requêtes passent par Drizzle (jamais de SQL concaténé ; le gabarit `sql` de Drizzle,
+  paramétré, est permis).
+- Tables : `users`, `user_settings` (paramètres de révision, hors `users` qui est mis en cache
+  5 min), `folders`, `sets` (`folder_id` → `ON DELETE SET NULL`), `tags` (unique sur
+  `(owner_id, lower(name))`), `set_tags`, `cards`, `card_reviews` (état FSRS par
+  utilisateur et carte ; pas de ligne = carte nouvelle), `review_logs` (historique ; `state` =
+  état **avant** la note). Tout part en cascade depuis `users`, `sets` et `cards`.
+- Migrations **uniquement additives** : `src/db/migrate.test.ts` rejoue la V1 avec des données puis
+  les migrations suivantes. `0001_v2` crée aussi l'extension `pg_trgm` (index GIN trigram de la
+  recherche), ajoutée à la main en tête du SQL généré. Connexions avec `jit = off` (`client.ts`).
 - Tests d'API : vraie base `quizlet_test`. `useTestDb()` (`src/test/test-db.ts`) vide les tables
   avant chaque test ; les fichiers s'exécutent en série (`fileParallelism: false`).
 - Config : `src/env.ts` (Zod). `NODE_ENV` vaut `production` par défaut. En dev, les scripts pnpm
   préchargent `load-dev-env.mjs`, qui lit `.env` puis `.env.development`.
+
+## Fonctionnalités V2 (conventions)
+
+- **Dossiers et tags** (`services/folders.ts`, `services/tags.ts`) : toujours filtrés par
+  `owner_id` (404 sinon). Les tags se créent par leur nom via `replaceSetTags` (champ `tags`
+  facultatif du set : absent = inchangés). Dossier et tags d'un set ne sont renvoyés qu'à son
+  auteur (`toDetail`).
+- **Recherche** : un seul prédicat, `searchCondition` (`services/sets.ts`), pour la bibliothèque et
+  la palette Ctrl+K : `ILIKE` + `escapeLike` sur titre, description, tags et cartes.
+- **Import** : parseur `packages/shared/src/import.ts` (sans Zod) commun au front (aperçu) et à
+  l'API, qui reparse toujours le texte brut. `LIMITS.cards` = 2000 (par set et par import),
+  `IMPORT_MAX_BYTES` = 1 000 000 (sous la limite de 1 Mio des requêtes).
+- **FSRS** : `ts-fsrs` uniquement côté API (`domain/scheduler.ts`). Il modifie `Date.prototype` :
+  ne jamais l'importer dans le front ; les échéances prévues sont calculées par l'API. Bornes du
+  jour : `dayBounds` (Postgres, fuseau de l'utilisateur). Horloge injectable :
+  `createApp({ now })`, `createTestClient(db, {}, { now })`. `replaceCards` modifie les cartes sur
+  place (upsert) : un delete/insert effacerait leur progression par cascade.
+- **Sauvegardes** : `docker/backup/backup.sh` (POSIX sh de busybox, testé à la main), service
+  `quizlet-backup`. Restauration = suppression des schémas `public` et `drizzle` puis rechargement,
+  en une transaction.
 
 ## Front
 
@@ -70,6 +100,12 @@ pnpm build
   classes canoniques (`wrap-break-word` plutôt que `break-words`).
 - Accessibilité : focus visible, labels, `aria-live` pour les retours (flashcards, quiz), focus
   déplacé au changement de page (`AppLayout`) et en fin de session.
+- Types de réponse de l'API dérivés avec `InferResponseType` dans `queries.ts` (`QueueCard`,
+  `Settings`…), jamais recopiés. Files de quiz et de révision figées pendant une séance
+  (`staleTime: Infinity`, `gcTime: 0`).
+- Raccourcis : `useShortcuts` (ignorés pendant une saisie et dans un dialogue ou un menu). Tout
+  nouveau raccourci va aussi dans l'aide `?` (`components/layout/ShortcutsDialog.tsx`).
+- Filtres de la bibliothèque (dossier, tags, page, recherche) dans l'URL : `lib/library.ts`.
 
 ## Règles de sécurité (SSO)
 
@@ -97,9 +133,22 @@ pnpm build
 ## Déploiement
 
 - `docker-compose.prod.yml` (projet `quizlet`) : `quizlet-web` (nginx sans privilèges, 8080),
-  `quizlet-api` (Node, 3000, migrations au démarrage), `quizlet-db` (Postgres 17). Services
-  préfixés `quizlet-` : leurs noms deviennent des alias DNS sur le réseau partagé `web`.
+  `quizlet-api` (Node, 3000, migrations au démarrage), `quizlet-db` (Postgres 17),
+  `quizlet-backup` (pg_dump quotidien, réseau interne seul). Services préfixés `quizlet-` : leurs
+  noms deviennent des alias DNS sur le réseau partagé `web`.
+- Les sauvegardes (`./backups`, `*.dump`) contiennent des données réelles : jamais dans git ni dans
+  une image (`.gitignore`, `.dockerignore`).
 - Images construites depuis la racine (`apps/*/Dockerfile`, contexte `.`). L'API est un bundle
   tsdown autonome (pas de `node_modules` dans l'image). `.dockerignore` exclut `.env*` et `sso-*.md`.
 - `apps/web/nginx.conf` : les en-têtes de sécurité sont au niveau `server`. Ne pas ajouter de
   `add_header` dans une `location` (cela annulerait leur héritage) : utiliser `expires`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

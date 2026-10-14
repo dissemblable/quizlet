@@ -1,7 +1,7 @@
 import { LIMITS } from '@quizlet/shared'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { cards, sets } from '../db/schema'
+import { cardReviews, cards, sets, users } from '../db/schema'
 import { copyTitle } from '../services/sets'
 import { createTestClient, readJson } from '../test/app'
 import { useTestDb } from '../test/test-db'
@@ -150,6 +150,37 @@ describe('PUT /api/sets/:id', () => {
     })
     // « Espagne » a été supprimée.
     expect(await db.select().from(cards).where(eq(cards.setId, set.id))).toHaveLength(3)
+  })
+
+  it('conserve la progression des cartes modifiées et efface celle des cartes retirées', async () => {
+    const set = await createSetAs('alice')
+    const [france, italie] = set.cards
+    const [alice] = await db.select().from(users).where(eq(users.username, 'alice'))
+    const progress = {
+      userId: alice?.id ?? '',
+      due: new Date(),
+      stability: 3,
+      difficulty: 5,
+      elapsedDays: 0,
+      scheduledDays: 3,
+      learningSteps: 0,
+      reps: 1,
+      lapses: 0,
+      state: 'review' as const,
+    }
+    await db.insert(cardReviews).values([
+      { ...progress, cardId: france?.id ?? '' },
+      { ...progress, cardId: italie?.id ?? '' },
+    ])
+
+    const res = await request(`/api/sets/${set.id}`, {
+      method: 'PUT',
+      as: 'alice',
+      body: { ...capitals, cards: [{ id: france?.id, term: 'France', definition: 'Paris !' }] },
+    })
+    expect(res.status).toBe(200)
+    const remaining = await db.select({ cardId: cardReviews.cardId }).from(cardReviews)
+    expect(remaining).toEqual([{ cardId: france?.id }])
   })
 
   it("interdit (403) la modification d'un set public par un autre utilisateur", async () => {

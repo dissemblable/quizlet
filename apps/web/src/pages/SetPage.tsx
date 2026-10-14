@@ -1,12 +1,15 @@
 import { countDistinctDefinitions, QUIZ_MIN_CARDS } from '@quizlet/shared'
 import {
+  BrainIcon,
   CopyIcon,
   LayersIcon,
   LinkIcon,
   ListChecksIcon,
   Loader2Icon,
   PencilIcon,
+  PenLineIcon,
   PlusIcon,
+  UploadIcon,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -80,6 +83,12 @@ function SetOverview({ set }: { set: SetDetail }) {
           <VisibilityBadge visibility={set.visibility} />
           <span>{cardCount}</span>
           {!set.isOwner && <span>Créé par {set.owner.displayName}</span>}
+          {set.tags.length > 0 && (
+            <span>
+              <span className="sr-only">Tags : </span>
+              {set.tags.map((tag) => `#${tag.name}`).join(' ')}
+            </span>
+          )}
         </div>
         <h1 className="text-3xl font-semibold tracking-tight wrap-break-word">{set.title}</h1>
         {set.description && (
@@ -90,6 +99,15 @@ function SetOverview({ set }: { set: SetDetail }) {
       </header>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <StudyModeLink
+          to={`/sets/${set.id}/review`}
+          icon={<BrainIcon />}
+          title="Répétition espacée"
+          description="Révisez chaque carte au bon moment (FSRS)."
+          unavailableReason={
+            set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
+          }
+        />
         <StudyModeLink
           to={`/sets/${set.id}/flashcards`}
           icon={<LayersIcon />}
@@ -108,6 +126,15 @@ function SetOverview({ set }: { set: SetDetail }) {
             countDistinctDefinitions(set.cards) < QUIZ_MIN_CARDS
               ? `Il faut au moins ${QUIZ_MIN_CARDS} cartes aux définitions différentes.`
               : undefined
+          }
+        />
+        <StudyModeLink
+          to={`/sets/${set.id}/write`}
+          icon={<PenLineIcon />}
+          title="Mode écrit"
+          description="Tapez la réponse, corrigée avec tolérance."
+          unavailableReason={
+            set.cards.length === 0 ? 'Ajoutez des cartes pour réviser.' : undefined
           }
         />
       </div>
@@ -129,6 +156,14 @@ function SetOverview({ set }: { set: SetDetail }) {
           <Button variant="outline" onClick={copyLink}>
             <LinkIcon />
             Copier le lien
+          </Button>
+        )}
+        {set.isOwner && (
+          <Button asChild variant="outline">
+            <Link to={`/sets/${set.id}/import`}>
+              <UploadIcon />
+              Importer des cartes
+            </Link>
           </Button>
         )}
         {set.isOwner && <DeleteSetDialog setId={set.id} title={set.title} />}

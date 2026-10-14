@@ -1,7 +1,17 @@
 import { asc, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { useTestDb } from '../test/test-db'
-import { cards, sets, users } from './schema'
+import {
+  cardReviews,
+  cards,
+  folders,
+  reviewLogs,
+  sets,
+  setTags,
+  tags,
+  userSettings,
+  users,
+} from './schema'
 import { DEMO_SETS, DEMO_USER, seedDemoData } from './seed'
 
 const db = useTestDb()
@@ -31,6 +41,29 @@ describe('seedDemoData', () => {
     await seedDemoData(db)
     expect(await db.select().from(users)).toHaveLength(1)
     expect(await db.select().from(sets)).toHaveLength(DEMO_SETS.length)
+    expect(await db.select().from(folders)).toHaveLength(2)
+    expect(await db.select().from(tags)).toHaveLength(5)
+  })
+
+  it('crée une progression de révision : des cartes dues aujourd’hui, d’autres plus tard', async () => {
+    const now = new Date('2026-10-13T08:00:00Z')
+    await seedDemoData(db, now)
+    const states = await db.select().from(cardReviews)
+    expect(states).toHaveLength(7)
+    expect(states.filter((state) => state.due <= now).length).toBeGreaterThan(0)
+    expect(states.filter((state) => state.due > now).length).toBeGreaterThan(0)
+    expect(states.some((state) => state.state === 'relearning' || state.state === 'learning')).toBe(
+      true,
+    )
+    expect((await db.select().from(reviewLogs)).length).toBeGreaterThan(states.length)
+    expect(await db.select().from(userSettings)).toHaveLength(1)
+  })
+
+  it('range les sets privés dans des dossiers et pose des tags', async () => {
+    await seedDemoData(db)
+    const demoFolders = await db.select({ name: folders.name }).from(folders)
+    expect(demoFolders.map((folder) => folder.name).sort()).toEqual(['Langues', 'Sciences'])
+    expect(await db.select().from(setTags)).toHaveLength(5)
   })
 })
 

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { ErrorState, LoadingState } from '@/components/states'
 import { ApiError } from '@/lib/http'
-import { useMe } from '@/lib/queries'
+import { useMe, useSaveSettings, useSettings } from '@/lib/queries'
 import { Header } from './Header'
 import { SessionExpiredBanner } from './SessionExpiredBanner'
 
@@ -25,10 +25,29 @@ function useFocusMainOnNavigation() {
   return main
 }
 
+/**
+ * Fuseau horaire du navigateur, enregistré une seule fois tant que l'utilisateur n'en a choisi
+ * aucun (Europe/Paris s'applique d'ici là). Il reste modifiable dans les paramètres.
+ */
+function useDetectTimeZone() {
+  const settings = useSettings()
+  const { mutate } = useSaveSettings()
+  const sent = useRef(false)
+
+  useEffect(() => {
+    if (sent.current || !settings.data || settings.data.timezone !== null) return
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (!timezone) return
+    sent.current = true
+    mutate({ ...settings.data, timezone })
+  }, [settings.data, mutate])
+}
+
 /** Structure commune : l'identité SSO (/api/me) est chargée avant d'afficher les pages. */
 export function AppLayout() {
   const me = useMe()
   const main = useFocusMainOnNavigation()
+  useDetectTimeZone()
   const needsLogin = me.error instanceof ApiError && me.error.needsLogin
 
   return (

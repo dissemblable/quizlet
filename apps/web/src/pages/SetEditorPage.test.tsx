@@ -43,7 +43,28 @@ describe('création d’un set', () => {
       description: null,
       visibility: 'private',
       cards: [{ term: 'a knife', definition: 'un couteau' }],
+      tags: [],
     })
+  })
+
+  it('ajoute des tags avec Entrée et les envoie avec le set', async () => {
+    const created = makeSet({ id: '22222222-2222-4222-8222-222222222222', title: 'Anglais' })
+    const fetchMock = mockApi({
+      'GET /api/me': { body: demoMe },
+      'GET /api/tags': { body: { tags: [{ id: 't1', name: 'vocabulaire', setCount: 2 }] } },
+      'POST /api/sets': { status: 201, body: { set: created } },
+      [`GET /api/sets/${created.id}`]: { body: { set: created } },
+    })
+    const user = userEvent.setup()
+    await renderApp('/sets/new')
+
+    await user.type(await screen.findByLabelText('Titre'), 'Anglais')
+    await user.type(screen.getByLabelText(/^Tags/), 'anglais{Enter}oral,')
+    expect(screen.getByRole('button', { name: 'Retirer le tag anglais' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Retirer le tag oral' }))
+    await user.click(screen.getByRole('button', { name: 'Créer le set' }))
+
+    await waitFor(() => expect(sentBody(fetchMock, 'POST', '/api/sets')?.tags).toEqual(['anglais']))
   })
 
   it('ajoute une carte et place le focus sur son terme', async () => {

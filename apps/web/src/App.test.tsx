@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { demoMe, installDomStubs, mockApi, renderApp } from '@/test/dom'
+import { libraryPage } from '@/test/fixtures'
 
 installDomStubs()
 
@@ -35,12 +36,23 @@ describe('App', () => {
   })
 
   it('place le focus sur le contenu principal après un changement de page', async () => {
-    mockApi({ 'GET /api/me': { body: demoMe }, 'GET /api/sets': { body: { sets: [] } } })
+    mockApi({ 'GET /api/me': { body: demoMe }, 'GET /api/sets': { body: libraryPage([]) } })
     const user = userEvent.setup()
     await renderApp()
     await user.click(await screen.findByRole('link', { name: 'Créer un set' }))
     expect(await screen.findByRole('heading', { name: 'Nouveau set' })).toBeTruthy()
     expect(document.activeElement?.id).toBe('contenu')
+  })
+
+  it('ouvre l’aide des raccourcis clavier avec « ? »', async () => {
+    mockApi({ 'GET /api/me': { body: demoMe } })
+    const user = userEvent.setup()
+    await renderApp('/nimporte/quoi')
+    await screen.findByRole('heading', { name: 'Page introuvable' })
+
+    await user.keyboard('?')
+    const dialog = await screen.findByRole('dialog', { name: 'Raccourcis clavier' })
+    expect(dialog.textContent).toContain('Noter : À revoir, Difficile, Bien, Facile')
   })
 
   it('affiche une page introuvable pour une adresse inconnue', async () => {

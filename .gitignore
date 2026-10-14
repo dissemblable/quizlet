@@ -21,3 +21,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+graphify-out/
+# Sauvegardes locales (pnpm db:backup) : données réelles, jamais versionnées
+backups/

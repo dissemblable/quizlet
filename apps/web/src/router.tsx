@@ -31,12 +31,36 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/SetEditorPage')).EditSetPage }),
       },
       {
+        path: 'import',
+        lazy: async () => ({ Component: (await import('@/pages/ImportPage')).ImportPage }),
+      },
+      {
+        path: 'sets/:id/import',
+        lazy: async () => ({ Component: (await import('@/pages/ImportPage')).ImportPage }),
+      },
+      {
         path: 'sets/:id/flashcards',
         lazy: async () => ({ Component: (await import('@/pages/FlashcardsPage')).FlashcardsPage }),
       },
       {
         path: 'sets/:id/quiz',
         lazy: async () => ({ Component: (await import('@/pages/QuizPage')).QuizPage }),
+      },
+      {
+        path: 'sets/:id/write',
+        lazy: async () => ({ Component: (await import('@/pages/WritePage')).WritePage }),
+      },
+      {
+        path: 'review',
+        lazy: async () => ({ Component: (await import('@/pages/ReviewPage')).ReviewPage }),
+      },
+      {
+        path: 'sets/:id/review',
+        lazy: async () => ({ Component: (await import('@/pages/ReviewPage')).ReviewPage }),
+      },
+      {
+        path: 'settings',
+        lazy: async () => ({ Component: (await import('@/pages/SettingsPage')).SettingsPage }),
       },
       { path: '*', Component: NotFoundPage },
     ],

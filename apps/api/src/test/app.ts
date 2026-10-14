@@ -52,8 +52,12 @@ interface RequestOptions {
 }
 
 /** App de test branchée sur la base de test, avec un helper de requête « derrière nginx ». */
-export function createTestClient(db: Db, overrides: Partial<Config> = {}) {
-  const app = createApp({ db, config: testConfig(overrides) })
+export function createTestClient(
+  db: Db,
+  overrides: Partial<Config> = {},
+  { now }: { now?: () => Date } = {},
+) {
+  const app = createApp({ db, config: testConfig(overrides), now })
 
   function request(path: string, options: RequestOptions = {}) {
     const headers: Record<string, string> = {

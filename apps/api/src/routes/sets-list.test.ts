@@ -1,4 +1,4 @@
-import { LIMITS } from '@quizlet/shared'
+import { LIBRARY_PAGE_SIZE, LIMITS } from '@quizlet/shared'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sets } from '../db/schema'
@@ -10,6 +10,8 @@ const db = useTestDb()
 
 interface ListJson {
   sets: Array<{ id: string; title: string; visibility: string; cardCount: number }>
+  total: number
+  page: number
 }
 
 let request: ReturnType<typeof createTestClient>['request']
@@ -69,6 +71,32 @@ describe('GET /api/sets', () => {
     expect(body.sets.map((set) => set.title)).toEqual(['Capitales européennes'])
   })
 
+  it('cherche aussi dans la description, les tags et le contenu des cartes', async () => {
+    const create = (title: string, extra: object) =>
+      request('/api/sets', {
+        method: 'POST',
+        as: 'alice',
+        body: { title, description: null, visibility: 'private', cards: [], ...extra },
+      })
+    await create('Description', { description: 'Révisions du brevet' })
+    await create('Tag', { tags: ['brevet blanc'] })
+    await create('Terme', { cards: [{ term: 'Brevet des collèges', definition: 'examen' }] })
+    await create('Définition', { cards: [{ term: 'DNB', definition: 'diplôme du BREVET' }] })
+    await create('Hors sujet', {
+      description: 'Rien à voir',
+      cards: [{ term: 'a', definition: 'b' }],
+    })
+    await createSetAs('bob', 'Brevet de Bob', 1, 'public')
+
+    const { body } = await listAs('alice', '?q=brevet')
+    expect(body.sets.map((set) => set.title).sort()).toEqual([
+      'Description',
+      'Définition',
+      'Tag',
+      'Terme',
+    ])
+  })
+
   it('traite % et _ comme des caractères ordinaires', async () => {
     await createSetAs('alice', '100% maths')
     await createSetAs('alice', 'Histoire')
@@ -86,6 +114,17 @@ describe('GET /api/sets', () => {
 
   it('renvoie une liste vide à un nouvel utilisateur', async () => {
     expect((await listAs('carol')).body.sets).toEqual([])
+  })
+
+  it('pagine la bibliothèque et renvoie le total', async () => {
+    for (let i = 0; i <= LIBRARY_PAGE_SIZE; i++) await createSetAs('alice', `Set ${i}`, 0)
+
+    const first = (await listAs('alice')).body
+    expect(first).toMatchObject({ total: LIBRARY_PAGE_SIZE + 1, page: 1 })
+    expect(first.sets).toHaveLength(LIBRARY_PAGE_SIZE)
+    const second = (await listAs('alice', '?page=2')).body
+    expect(second.sets.map((set) => set.title)).toEqual(['Set 0'])
+    expect((await listAs('alice', '?page=0')).status).toBe(400)
   })
 })
 
