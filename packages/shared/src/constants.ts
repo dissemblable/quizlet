@@ -47,6 +47,28 @@ export type Rating = (typeof RATINGS)[number]
 /** Taille maximale d'un texte ou d'un fichier importé, en octets UTF-8 (1 Mo). */
 export const IMPORT_MAX_BYTES = 1_000_000
 
+/** Génération de cartes par IA : limites de la demande (cours et fichiers joints compris). */
+export const AI_LIMITS = {
+  prompt: 2000,
+  files: 10,
+  /** Taille maximale d'une image acceptée par l'API Claude, en octets (5 Mo). */
+  imageBytes: 5 * 1024 * 1024,
+  /** Taille maximale de la requête, fichiers compris, en octets (20 Mo). */
+  requestBytes: 20 * 1024 * 1024,
+  /** Nombre maximal de cartes demandées au modèle. */
+  cards: 300,
+} as const
+
+/** Fichiers de cours acceptés : lus directement par Claude (PDF, images) ou en texte brut. */
+export const AI_FILE_TYPES = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'text/plain',
+] as const
+
 /** Nombre de sets par page dans la bibliothèque. */
 export const LIBRARY_PAGE_SIZE = 24
 
@@ -75,6 +97,13 @@ export const MESSAGES = {
   separatorTooLong: 'Un séparateur ne peut pas dépasser 10 caractères',
   separatorsMustDiffer: 'Les séparateurs de terme et de carte doivent être différents',
   noCardToImport: 'Aucune carte valide à importer',
+  aiPromptRequired: 'Décrivez les cartes à générer',
+  aiPromptTooLong: `La demande ne peut pas dépasser ${AI_LIMITS.prompt} caractères`,
+  aiTextTooLarge: 'Le cours collé ne peut pas dépasser 1 Mo',
+  aiFileType: 'Formats acceptés : PDF, PNG, JPEG, WebP, GIF et TXT',
+  aiImageTooLarge: 'Une image ne peut pas dépasser 5 Mo',
+  aiTooManyFiles: `Joignez ${AI_LIMITS.files} fichiers au maximum`,
+  aiRequestTooLarge: 'Fichiers trop volumineux : 20 Mo au total',
   timezoneInvalid: 'Fuseau horaire inconnu',
   perDayInvalid: `Choisissez un nombre entier entre 0 et ${SETTINGS_LIMITS.perDay}`,
   retentionInvalid: `La rétention cible doit être comprise entre ${frenchDecimal(SETTINGS_LIMITS.minRetention)} et ${frenchDecimal(SETTINGS_LIMITS.maxRetention)}`,

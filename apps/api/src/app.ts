@@ -9,12 +9,14 @@ import { errorBody, handleError } from './errors'
 import { csrfGuard } from './middleware/csrf'
 import { type ClientIpResolver, identity } from './middleware/identity'
 import { createTrustedProxyMatcher, type TrustedProxyMatcher } from './middleware/trusted-proxies'
+import { aiRoutes } from './routes/ai'
 import { foldersRoutes } from './routes/folders'
 import { meRoutes } from './routes/me'
 import { reviewRoutes } from './routes/review'
 import { setsRoutes } from './routes/sets'
 import { settingsRoutes } from './routes/settings'
 import { tagsRoutes } from './routes/tags'
+import { type CardGenerator, createClaudeGenerator } from './services/ai'
 import { createUserResolver } from './services/users'
 import type { AppEnv } from './types'
 
@@ -26,10 +28,21 @@ export interface AppDeps {
   clientIp?: ClientIpResolver
   /** Horloge de la planification des révisions (fixée dans les tests). */
   now?: () => Date
+  /** Génération de cartes par IA ; null : désactivée. */
+  generator?: CardGenerator | null
 }
 
-export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps) {
+/** Route qui accepte des fichiers joints : elle applique sa propre limite de taille. */
+const AI_GENERATE_PATH = '/api/ai/generate'
+
+export function createApp({ db, config, trustedProxies, clientIp, now, generator }: AppDeps) {
   const app = new Hono<AppEnv>().basePath('/api')
+  const cardGenerator =
+    generator === undefined
+      ? config.anthropicApiKey
+        ? createClaudeGenerator(config.anthropicApiKey)
+        : null
+      : generator
 
   app.onError(handleError)
   app.notFound((c) => c.json(errorBody('NOT_FOUND', 'Ressource introuvable.'), 404))
@@ -50,13 +63,12 @@ export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps
   if (config.corsOrigins.length > 0) {
     app.use(cors({ origin: config.corsOrigins, credentials: true }))
   }
-  app.use(
-    bodyLimit({
-      maxSize: 1024 * 1024,
-      onError: (c) =>
-        c.json(errorBody('PAYLOAD_TOO_LARGE', 'Requête trop volumineuse (1 Mo maximum).'), 413),
-    }),
-  )
+  const defaultBodyLimit = bodyLimit({
+    maxSize: 1024 * 1024,
+    onError: (c) =>
+      c.json(errorBody('PAYLOAD_TOO_LARGE', 'Requête trop volumineuse (1 Mo maximum).'), 413),
+  })
+  app.use((c, next) => (c.req.path === AI_GENERATE_PATH ? next() : defaultBodyLimit(c, next)))
 
   return (
     app
@@ -71,12 +83,13 @@ export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps
           clientIp,
         }),
       )
-      .route('/me', meRoutes(config.logoutUrl))
+      .route('/me', meRoutes(config.logoutUrl, cardGenerator !== null))
       .route('/sets', setsRoutes(db))
       .route('/folders', foldersRoutes(db))
       .route('/tags', tagsRoutes(db))
       .route('/review', reviewRoutes(db, now ?? (() => new Date())))
       .route('/settings', settingsRoutes(db))
+      .route('/ai', aiRoutes(cardGenerator))
   )
 }
 

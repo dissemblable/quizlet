@@ -20,6 +20,7 @@
     "db:seed": "tsx --import ./load-dev-env.mjs src/scripts/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@hono/node-server": "^2.1.4",
     "@hono/zod-validator": "^0.9.1",
     "drizzle-orm": "^0.45.4",

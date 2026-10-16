@@ -74,6 +74,12 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
   jour : `dayBounds` (Postgres, fuseau de l'utilisateur). Horloge injectable :
   `createApp({ now })`, `createTestClient(db, {}, { now })`. `replaceCards` modifie les cartes sur
   place (upsert) : un delete/insert effacerait leur progression par cascade.
+- **Génération IA** : `services/ai.ts` est le seul point d'appel à Claude (`@anthropic-ai/sdk`,
+  `claude-opus-5-5`, sortie structurée validée par `toDraft`). L'API ne fait que produire un
+  brouillon, jamais enregistré : il passe à l'éditeur par l'état de navigation (`/generate` →
+  `/sets/new`). `POST /api/ai/generate` (multipart, 20 Mo, hors `bodyLimit` global) répond en NDJSON
+  (`AiEvent`) ; générateur injectable : `createApp({ generator })`, `createTestClient(db, {}, { generator })`.
+  Sans `ANTHROPIC_API_KEY`, la route répond 503 et `/me` renvoie `aiEnabled: false`.
 - **Sauvegardes** : `docker/backup/backup.sh` (POSIX sh de busybox, testé à la main), service
   `quizlet-backup`. Restauration = suppression des schémas `public` et `drizzle` puis rechargement,
   en une transaction.

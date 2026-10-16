@@ -39,9 +39,16 @@ describe('parseConfig', () => {
   })
 
   it('traite une variable vide comme absente', () => {
-    const config = parseConfig({ ...prod, PORT: ' ', DEV_AUTH_USER: '' })
+    const config = parseConfig({ ...prod, PORT: ' ', DEV_AUTH_USER: '', ANTHROPIC_API_KEY: '' })
     expect(config.port).toBe(3000)
     expect(config.devIdentity).toBeNull()
+    expect(config.anthropicApiKey).toBeNull()
+  })
+
+  it("lit la clé de l'API Claude, facultative", () => {
+    expect(parseConfig({ ...prod, ANTHROPIC_API_KEY: ' sk-ant-test ' }).anthropicApiKey).toBe(
+      'sk-ant-test',
+    )
   })
 
   it('refuse une URL de base de données absente ou invalide', () => {

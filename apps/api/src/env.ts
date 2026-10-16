@@ -41,6 +41,7 @@ const envSchema = z
     APP_ORIGIN: commaList.optional(),
     CORS_ORIGINS: commaList.optional(),
     AUTH_LOGOUT_URL: z.url({ protocol: /^https?$/, error: 'doit être une URL http(s)' }).optional(),
+    ANTHROPIC_API_KEY: z.string().trim().optional(),
     DEV_AUTH_USER: z.string().optional(),
     DEV_AUTH_EMAIL: z.email({ error: 'doit être une adresse email' }).optional(),
     DEV_AUTH_NAME: z.string().optional(),
@@ -121,6 +122,8 @@ export interface Config {
   /** Origines autorisées en CORS (vide par défaut : aucune). */
   corsOrigins: string[]
   logoutUrl: string | null
+  /** Clé de l'API Claude ; null : génération par IA désactivée. */
+  anthropicApiKey: string | null
   /** Identité fixe injectée par le mode de dev ; toujours null en production. */
   devIdentity: Identity | null
 }
@@ -155,6 +158,7 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
     appOrigins: values.APP_ORIGIN ?? (production ? [] : ['http://localhost:5180']),
     corsOrigins: values.CORS_ORIGINS ?? [],
     logoutUrl: values.AUTH_LOGOUT_URL ?? null,
+    anthropicApiKey: values.ANTHROPIC_API_KEY ?? null,
     devIdentity:
       devUser && !production
         ? {

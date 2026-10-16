@@ -23,6 +23,9 @@ Authelia, en forward-auth).
   titre, la description, les tags et le contenu des cartes de mes sets.
 - **Import CSV / copier-coller** (V2) : depuis « Nouveau set » ou un set existant (« Importer des
   cartes »). Voir [Import de cartes](#import-de-cartes).
+- **Génération par IA** : un set créé par Claude à partir d'une demande (« 100 mots de
+  vocabulaire anglais ») et, au besoin, d'un cours (texte, PDF ou photos). Voir
+  [Génération par IA](#génération-par-ia).
 - **Mode écrit** (V2) : le terme (ou la définition, ou l'un ou l'autre au hasard) est affiché, on
   tape la réponse. Correction tolérante, bouton « J'avais raison » après une erreur, mélange en
   option, limitation possible aux cartes à revoir aujourd'hui (lues dans la planification FSRS,
@@ -151,7 +154,7 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | Route | Accès |
 |---|---|
 | `GET /health` | Sans identité (healthcheck Docker) |
-| `GET /me` | Utilisateur courant et `logoutUrl` |
+| `GET /me` | Utilisateur courant, `logoutUrl` et `aiEnabled` (génération par IA configurée) |
 | `GET /sets?q=&folder=&tags=&page=` | Ma bibliothèque, 24 sets par page : `{ sets, total, page, pageSize }`. `q` cherche dans le titre, la description, les tags et les cartes ; `folder` vaut un identifiant ou `none` ; `tags` liste des identifiants séparés par des virgules |
 | `POST /sets` | Crée un set (titre, description, visibilité, cartes ordonnées, tags facultatifs) |
 | `GET /sets/:id` | Auteur, ou n'importe quel utilisateur si le set est public |
@@ -170,6 +173,7 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | `GET /folders`, `POST /folders` | Mes dossiers (avec leur nombre de sets) ; création |
 | `PATCH /folders/:id`, `DELETE /folders/:id` | Propriétaire seul (404 sinon) : renommage, suppression |
 | `GET /tags`, `DELETE /tags/:id` | Mes tags (avec leur nombre de sets) ; suppression par le propriétaire seul (404 sinon) |
+| `POST /ai/generate` | Multipart `{ prompt, text?, files? }` → flux NDJSON, puis brouillon `{ title, description, cards }` jamais enregistré (503 sans clé, 429 si une génération est en cours) |
 
 Règles d'accès, vérifiées côté serveur dans `apps/api/src/services/sets.ts` :
 
@@ -247,6 +251,23 @@ UTF-8 (1 Mo au plus, 1 000 000 octets ; un fichier dans un autre encodage est re
 La limite de 1 Mo laisse de la marge sous celle des requêtes (1 Mio, côté API comme côté nginx),
 même avec l'encodage JSON du texte.
 
+## Génération par IA
+
+La page `/generate` (bouton « Générer avec l'IA » de « Nouveau set ») envoie une demande à Claude
+(`claude-opus-5-5`), avec un cours facultatif : texte collé, et jusqu'à 10 fichiers PDF, images
+(PNG, JPEG, WebP, GIF ; 5 Mo par image) ou `.txt`, 20 Mo au total. Claude lit les PDF et les
+photos directement.
+
+- **Brouillon** : l'API renvoie un titre, une description et les cartes, sans rien enregistrer.
+  Le brouillon s'ouvre dans l'éditeur de set, où l'on corrige avant « Créer le set ». Les cartes
+  trop longues sont écartées (et comptées), 300 cartes au plus.
+- **Flux** : `POST /api/ai/generate` répond en NDJSON (progression, puis brouillon ou erreur) avec
+  une ligne au moins toutes les 15 s, pour qu'aucun proxy ne coupe une génération longue.
+  « Annuler », ou quitter la page, interrompt aussi l'appel à Claude.
+- **Coût** : chaque génération est facturée sur la clé `ANTHROPIC_API_KEY`, de l'ordre de 0,15 à
+  0,40 $ (100 mots de vocabulaire, ou un PDF d'une trentaine de pages). Une seule génération à la
+  fois par utilisateur. Sans clé, la fonction est désactivée et le bouton masqué.
+
 ## Variables d'environnement (API)
 
 Elles sont validées par Zod au démarrage. Une variable vide (`FOO=`) est considérée comme absente.
@@ -263,6 +284,7 @@ Elles sont validées par Zod au démarrage. Une variable vide (`FOO=`) est consi
 | `APP_ORIGIN` | requis en prod (`http://localhost:5180` sinon) | Origine publique de l'app, pour le contrôle CSRF |
 | `AUTH_LOGOUT_URL` | requis en prod | URL de déconnexion d'Authelia |
 | `CORS_ORIGINS` | vide | Origines autorisées en CORS (aucune par défaut) |
+| `ANTHROPIC_API_KEY` | – | Clé de l'API Claude ; absente = génération par IA désactivée |
 | `DEV_AUTH_USER` | – | Active l'identité factice de dev. **Interdit en production** |
 | `DEV_AUTH_NAME`, `DEV_AUTH_EMAIL`, `DEV_AUTH_GROUPS` | – | Détails de l'identité factice |
 | `TEST_DATABASE_URL` | `…/quizlet_test` | Base utilisée par les tests |
@@ -376,6 +398,16 @@ server {
 
     include /etc/nginx/snippets/authelia-location.conf;
 
+    # Génération par IA : accepte des fichiers de cours (20 Mo côté API, plus l'enveloppe multipart).
+    location /api/ai/ {
+        include /etc/nginx/snippets/authelia-authrequest.conf;
+        client_max_body_size 21m;
+
+        set $upstream_quizlet_api http://quizlet-api:3000;
+        proxy_pass $upstream_quizlet_api;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
     # API : reçoit l'identité Authelia (Remote-User, Remote-Name, Remote-Email, Remote-Groups).
     location /api/ {
         include /etc/nginx/snippets/authelia-authrequest.conf;
@@ -403,7 +435,10 @@ docker exec nginx nginx -t && docker exec nginx nginx -s reload
 - `proxy_pass` en variable, comme dans le reste du stack : nginx démarre même si l'app est arrêtée.
 - L'API se fie au pair TCP (le conteneur `nginx`, cf. `TRUSTED_PROXIES=nginx`) et ignore
   `X-Forwarded-For` : le `$proxy_add_x_forwarded_for` de `proxy.conf` ne pose pas de problème.
-- La limite de taille de nginx par défaut (`client_max_body_size 1m`) correspond à celle de l'API.
+- La limite de taille de nginx par défaut (`client_max_body_size 1m`) correspond à celle de l'API,
+  sauf pour `/api/ai/` (fichiers de cours, 20 Mo). Le flux de la génération n'est pas mis en tampon
+  (en-tête `X-Accel-Buffering: no` envoyé par l'API) et envoie une ligne toutes les 15 s : les
+  délais par défaut de nginx et de Cloudflare suffisent.
 
 ### Règle Authelia (facultative)
 

@@ -80,6 +80,7 @@ export const demoMe = {
     email: 'demo@example.com',
   },
   logoutUrl: 'https://auth.example.test/logout',
+  aiEnabled: false,
 }
 
 /** Rend l'application complète à l'adresse donnée, avec un client de requêtes neuf et sans retry. */
