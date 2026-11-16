@@ -146,6 +146,11 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
 - `apps/web/nginx.conf` : les en-têtes de sécurité sont au niveau `server`. Ne pas ajouter de
   `add_header` dans une `location` (cela annulerait leur héritage) : utiliser `expires`.
 
+## App mobile (en conception)
+
+- Décisions, options écartées et points à vérifier : `docs/app-mobile.md`. À lire avant tout
+  travail sur l'authentification mobile ou sur `apps/mobile`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
