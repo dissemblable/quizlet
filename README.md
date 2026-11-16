@@ -235,6 +235,10 @@ UTF-8 (1 Mo au plus, 1 000 000 octets ; un fichier dans un autre encodage est re
 - **Format** : chaque carte est coupée au premier séparateur de terme, la suite forme la
   définition. Les champs entre guillemets peuvent contenir les séparateurs et des retours à la
   ligne (`""` pour un guillemet), comme dans un CSV d'Excel ou un copier-coller de Sheets.
+- **Prompt pour Claude** : un bloc repliable en haut de la page propose un prompt à copier (bouton
+  « Copier le prompt »). Il demande à Claude une carte par ligne, `terme ; définition`, dans un seul
+  bloc de code, à coller ensuite dans le champ d'import. Aucune clé d'API : tout se fait dans votre
+  conversation Claude.
 - **Aperçu** : calculé dans le navigateur à chaque modification du texte ou des séparateurs. Il
   liste les cartes détectées et signale les lignes invalides (terme ou définition vide, ou trop
   long). Les lignes vides sont ignorées sans être signalées.

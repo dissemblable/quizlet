@@ -68,7 +68,10 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
   la palette Ctrl+K : `ILIKE` + `escapeLike` sur titre, description, tags et cartes.
 - **Import** : parseur `packages/shared/src/import.ts` (sans Zod) commun au front (aperçu) et à
   l'API, qui reparse toujours le texte brut. `LIMITS.cards` = 2000 (par set et par import),
-  `IMPORT_MAX_BYTES` = 1 000 000 (sous la limite de 1 Mio des requêtes).
+  `IMPORT_MAX_BYTES` = 1 000 000 (sous la limite de 1 Mio des requêtes). Le prompt à copier dans
+  Claude (`apps/web/src/lib/prompt.ts`, affiché par `ClaudePrompt` dans la page d'import) demande
+  `terme ; définition` : il doit rester compatible avec `detectSeparators` / `parseCards` (aucune
+  tabulation) et suivre `LIMITS`.
 - **FSRS** : `ts-fsrs` uniquement côté API (`domain/scheduler.ts`). Il modifie `Date.prototype` :
   ne jamais l'importer dans le front ; les échéances prévues sont calculées par l'API. Bornes du
   jour : `dayBounds` (Postgres, fuseau de l'utilisateur). Horloge injectable :
