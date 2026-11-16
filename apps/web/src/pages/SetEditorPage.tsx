@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LIMITS } from '@quizlet/shared'
-import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon, SparklesIcon, UploadIcon } from 'lucide-react'
+import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon, UploadIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { CardFieldsRow } from '@/components/sets/CardFieldsRow'
 import { TagInput } from '@/components/sets/TagInput'
@@ -27,10 +27,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { pageTitle } from '@/config'
 import { pluralize } from '@/lib/format'
 import { errorMessage } from '@/lib/http'
-import { type SetDetail, useCreateSet, useMe, useTags, useUpdateSet } from '@/lib/queries'
+import { type SetDetail, useCreateSet, useTags, useUpdateSet } from '@/lib/queries'
 import {
   countFilledCards,
-  draftToFormValues,
   emptyCard,
   newSetFormValues,
   type SetFormOutput,
@@ -42,8 +41,7 @@ import {
 import { SetQueryStates, useSetFromRoute } from '@/pages/SetPage'
 
 export function NewSetPage() {
-  const draft = draftToFormValues(useLocation().state)
-  return <SetEditor initialValues={draft ?? newSetFormValues()} fromDraft={draft !== null} />
+  return <SetEditor initialValues={newSetFormValues()} />
 }
 
 export function EditSetPage() {
@@ -84,18 +82,8 @@ const VISIBILITY_OPTIONS = [
   },
 ] as const
 
-function SetEditor({
-  set,
-  initialValues,
-  fromDraft = false,
-}: {
-  set?: SetDetail
-  initialValues: SetFormValues
-  /** Brouillon généré par l'IA : il serait perdu sans avertissement en quittant la page. */
-  fromDraft?: boolean
-}) {
+function SetEditor({ set, initialValues }: { set?: SetDetail; initialValues: SetFormValues }) {
   const navigate = useNavigate()
-  const aiEnabled = useMe().data?.aiEnabled ?? false
   const create = useCreateSet()
   const update = useUpdateSet(set?.id ?? '')
   const allowLeave = useRef(false)
@@ -147,28 +135,18 @@ function SetEditor({
   return (
     <form onSubmit={onSubmit} noValidate aria-labelledby="editor-title">
       <title>{pageTitle(set ? `Modifier « ${set.title} »` : 'Nouveau set')}</title>
-      <UnsavedChangesGuard when={(isDirty || fromDraft) && !isSubmitting} allowLeave={allowLeave} />
+      <UnsavedChangesGuard when={isDirty && !isSubmitting} allowLeave={allowLeave} />
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-2">
         <h1 id="editor-title" className="text-2xl font-semibold tracking-tight">
           {set ? 'Modifier le set' : 'Nouveau set'}
         </h1>
-        <div className="flex flex-wrap gap-2">
-          {!set && aiEnabled && (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/generate">
-                <SparklesIcon />
-                Générer avec l'IA
-              </Link>
-            </Button>
-          )}
-          <Button asChild variant="outline" size="sm">
-            <Link to={set ? `/sets/${set.id}/import` : '/import'}>
-              <UploadIcon />
-              Importer des cartes
-            </Link>
-          </Button>
-        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to={set ? `/sets/${set.id}/import` : '/import'}>
+            <UploadIcon />
+            Importer des cartes
+          </Link>
+        </Button>
       </div>
 
       <FieldGroup>

@@ -1,5 +1,5 @@
 import type { HttpBindings } from '@hono/node-server'
-import { type AppDeps, createApp } from '../app'
+import { createApp } from '../app'
 import type { Db } from '../db/client'
 import type { Config } from '../env'
 import { TEST_DATABASE_URL } from './test-db'
@@ -19,7 +19,6 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     appOrigins: [APP_ORIGIN],
     corsOrigins: [],
     logoutUrl: 'https://auth.example.test/logout',
-    anthropicApiKey: null,
     devIdentity: null,
     ...overrides,
   }
@@ -47,8 +46,6 @@ interface RequestOptions {
   /** Utilisateur SSO à simuler ; omis = aucune identité. */
   as?: string
   body?: unknown
-  /** Corps multipart (le navigateur fixe lui-même son Content-Type). */
-  form?: FormData
   headers?: Record<string, string>
   /** Adresse du pair TCP ; par défaut le proxy de confiance. */
   from?: string
@@ -58,9 +55,9 @@ interface RequestOptions {
 export function createTestClient(
   db: Db,
   overrides: Partial<Config> = {},
-  { now, generator }: Pick<AppDeps, 'now' | 'generator'> = {},
+  { now }: { now?: () => Date } = {},
 ) {
-  const app = createApp({ db, config: testConfig(overrides), now, generator })
+  const app = createApp({ db, config: testConfig(overrides), now })
 
   function request(path: string, options: RequestOptions = {}) {
     const headers: Record<string, string> = {
@@ -75,8 +72,7 @@ export function createTestClient(
       {
         method: options.method ?? 'GET',
         headers,
-        body:
-          options.form ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       },
       socketFrom(options.from ?? PROXY_IP),
     )
@@ -89,7 +85,6 @@ export function createTestClient(
 export interface MeBody {
   user: { id: string; username: string; displayName: string; email: string | null }
   logoutUrl: string | null
-  aiEnabled: boolean
 }
 
 export function readJson<T>(res: Response): Promise<T> {

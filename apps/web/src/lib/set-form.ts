@@ -1,5 +1,4 @@
 import {
-  type AiDraft,
   LIMITS,
   MESSAGES,
   type SetInput,
@@ -63,21 +62,6 @@ export function newSetFormValues(): SetFormValues {
     visibility: 'private',
     cards: [emptyCard(), emptyCard(), emptyCard()],
     tags: [],
-  }
-}
-
-/**
- * Brouillon généré par l'IA, transmis dans l'état de navigation (`/generate` → `/sets/new`) :
- * valeurs initiales de l'éditeur, ou null en son absence.
- */
-export function draftToFormValues(state: unknown): SetFormValues | null {
-  const draft = (state as { draft?: Partial<AiDraft> } | null)?.draft
-  if (!draft || !Array.isArray(draft.cards)) return null
-  return {
-    ...newSetFormValues(),
-    title: draft.title ?? '',
-    description: draft.description ?? '',
-    cards: draft.cards.map(({ term, definition }) => ({ term, definition })),
   }
 }
 

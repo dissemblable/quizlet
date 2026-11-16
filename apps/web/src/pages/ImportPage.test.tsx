@@ -2,6 +2,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
+import { CLAUDE_PROMPT } from '@/lib/prompt'
 import { router } from '@/router'
 import { demoMe, installDomStubs, mockApi, renderApp, sentBody } from '@/test/dom'
 import { makeSet } from '@/test/fixtures'
@@ -58,6 +59,18 @@ describe('import de cartes', () => {
       'textContent',
       "Ce fichier n'est pas encodé en UTF-8. Enregistrez-le au format « CSV UTF-8 » puis réessayez.",
     )
+  })
+
+  it('copie le prompt pour Claude sans lancer d’import', async () => {
+    const fetchMock = mockApi({ 'GET /api/me': { body: demoMe } })
+    // `userEvent.setup()` remplace `navigator.clipboard` par un presse-papiers factice.
+    const user = userEvent.setup()
+    await renderApp('/import')
+
+    await user.click(await screen.findByText('Générer les cartes avec Claude'))
+    await user.click(screen.getByRole('button', { name: 'Copier le prompt' }))
+    expect(await navigator.clipboard.readText()).toBe(CLAUDE_PROMPT)
+    expect(sentBody(fetchMock, 'POST', '/api/sets/import')).toBeUndefined()
   })
 
   it("réserve l'import dans un set existant à son auteur", async () => {

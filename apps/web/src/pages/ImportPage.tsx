@@ -10,6 +10,7 @@ import { Loader2Icon, LockIcon, UploadIcon } from 'lucide-react'
 import { type FormEvent, useDeferredValue, useId, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
+import { ClaudePrompt } from '@/components/sets/ClaudePrompt'
 import { EmptyState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import {
@@ -204,6 +205,8 @@ function ImportForm({ set }: { set?: SetDetail }) {
         choisissez un fichier .csv ou .txt en UTF-8. {LIMITS.cards} cartes et 1 Mo au maximum.
         {set && ' Les cartes sont ajoutées à la fin du set.'}
       </p>
+
+      <ClaudePrompt />
 
       <FieldGroup>
         {!set && (

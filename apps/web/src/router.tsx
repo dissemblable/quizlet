@@ -35,10 +35,6 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/ImportPage')).ImportPage }),
       },
       {
-        path: 'generate',
-        lazy: async () => ({ Component: (await import('@/pages/GeneratePage')).GeneratePage }),
-      },
-      {
         path: 'sets/:id/import',
         lazy: async () => ({ Component: (await import('@/pages/ImportPage')).ImportPage }),
       },
