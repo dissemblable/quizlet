@@ -2,6 +2,10 @@ import { type ErrorCode, isApiErrorBody } from './api'
 
 export type ClientErrorCode = ErrorCode | 'SESSION_EXPIRED' | 'NETWORK_ERROR' | 'UNKNOWN'
 
+/** Messages des erreurs levées par les `fetch` des clients (web et mobile). */
+export const SESSION_EXPIRED_MESSAGE = 'Votre session a expiré. Reconnectez-vous pour continuer.'
+export const NETWORK_ERROR_MESSAGE = 'Impossible de joindre le serveur. Vérifiez votre connexion.'
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,

@@ -1,5 +1,13 @@
 export { type ApiErrorBody, ERROR_CODES, type ErrorCode, isApiErrorBody } from './api'
-export { ApiError, type ClientErrorCode, errorMessage, toApiError, unwrap } from './client-errors'
+export {
+  ApiError,
+  type ClientErrorCode,
+  errorMessage,
+  NETWORK_ERROR_MESSAGE,
+  SESSION_EXPIRED_MESSAGE,
+  toApiError,
+  unwrap,
+} from './client-errors'
 export {
   CARD_STATES,
   type CardState,
