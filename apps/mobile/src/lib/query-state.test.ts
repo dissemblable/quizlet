@@ -23,6 +23,11 @@ describe('queryView', () => {
     expect(queryView(query({ isError: true }))).toBe('error')
   })
 
+  it('« error » prime sur la pause : un rafraîchissement raté après un succès reste « error »', () => {
+    expect(queryView(query({ isError: true, fetchStatus: 'paused' }))).toBe('error')
+    expect(queryView(query({ isError: true, fetchStatus: 'fetching' }))).toBe('error')
+  })
+
   it('« ready » : données présentes, y compris pendant un rafraîchissement ou en pause', () => {
     expect(queryView(query({}))).toBe('ready')
     expect(queryView(query({ fetchStatus: 'fetching' }))).toBe('ready')
