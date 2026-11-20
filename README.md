@@ -82,13 +82,17 @@ apps/
     src/pages/              bibliothèque, set, éditeur, import, flashcards, quiz, mode écrit,
                             révision, paramètres
     src/components/         mise en page, composants métier, ui/ (shadcn/ui)
-    src/lib/                client API, requêtes, logique pure (sessions, formulaires, mode
-                            écrit, séance de révision), thème
+    src/lib/                client API, requêtes, thème (la logique pure est dans packages/shared)
     nginx.conf, Dockerfile  image statique de production
-  mobile/                   App Android (Expo, React Native), en construction : voir
+  mobile/                   App Android (Expo SDK 58, React Native), mêmes fonctionnalités que le
+                            web, plus hors-ligne et rappel quotidien : voir « App mobile » et
                             docs/app-mobile.md (conception et décisions)
+    src/app/                routes Expo Router (4 onglets : Bibliothèque, Révision, Recherche, Compte)
+    src/{ui,auth,offline,notifications,lib,features}/   composants, OIDC, cache hors ligne, rappels
 packages/
   shared/                   schémas Zod, limites, messages, utilitaires (mélange, quiz, import CSV)
+                            et logique pure commune au web et au mobile (reducers flashcards, quiz,
+                            révision et mode écrit, formulaire de set, formats, erreurs client)
 docker/                     initialisation du Postgres de dev, script de sauvegarde (backup/)
 docker-compose.yml          Postgres de dev, et outil de sauvegarde local (profil tools)
 docker-compose.prod.yml     production derrière Authelia, sauvegardes comprises
@@ -98,6 +102,28 @@ docker-compose.prod.yml     production derrière Authelia, sauvegardes comprises
 - **TypeScript strict** partout. La config de base est `tsconfig.base.json`.
 - Le front appelle l'API avec le client RPC de Hono (`hc<AppType>`). Le type `AppType` est importé
   directement depuis `@quizlet/api`, sans aucune duplication de types.
+
+## App mobile (Android)
+
+`apps/mobile` est une app Expo (SDK 58, Hermes) réservée à Android. Elle offre les mêmes
+fonctionnalités que le web (bibliothèque, dossiers et tags, éditeur, import, flashcards, quiz, mode
+écrit, révision FSRS, paramètres) et ajoute la **révision hors ligne** (les notes données sans réseau
+sont rejouées dans l'ordre à la reconnexion) et un **rappel quotidien** local. L'authentification
+passe par Authelia (voir « Authentification mobile »).
+
+```bash
+cd apps/mobile
+cp .env.example .env            # puis renseigner l'URL de l'app, celle d'Authelia et le client OIDC
+pnpm test                       # logique pure (Vitest) ; pnpm typecheck && pnpm lint à la racine
+npx expo prebuild --platform android && npx expo run:android   # dev-client sur un téléphone en USB
+pnpm start                      # Metro pour le dev-client
+cd android && ./gradlew assembleRelease                        # APK installable
+```
+
+Prérequis du build natif : JDK 17, Android SDK (licences acceptées), `ANDROID_HOME`, et sous Windows
+les chemins longs activés (`LongPathsEnabled`). Le dossier `android/` est généré et ignoré par git.
+L'app n'est pas utilisable avec Expo Go (schéma `quizlet://` et modules natifs). Le relais OAuth
+`POST /api/mobile/callback` doit être déployé côté API avant la première connexion.
 
 ## Scripts (à la racine)
 
@@ -343,7 +369,7 @@ Navigateur → Cloudflare → cloudflared → nginx ──auth_request──▶ 
 
 ### Authentification mobile (Bearer via Authelia)
 
-L'app Android (`apps/mobile`, en construction ; conception et décisions dans
+L'app Android (`apps/mobile` ; conception, décisions et checklist appareil dans
 [`docs/app-mobile.md`](docs/app-mobile.md)) se connecte par OIDC auprès d'Authelia, dans le
 navigateur système (Custom Tab) : le mot de passe et le TOTP se saisissent sur le portail habituel,
 jamais dans l'app. Elle envoie ensuite `Authorization: Bearer <jeton d'accès>` : nginx le fait

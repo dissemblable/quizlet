@@ -1,8 +1,11 @@
 # App mobile — notes de conception
 
-État au 2026-11-20 : l'authentification est vérifiée de bout en bout (les 6 vérifications sont
-faites). Aucun code de production n'est écrit. Ce fichier résume ce qui a
-été décidé, ce qui est proposé et ce qui reste à vérifier.
+État au 2026-11-20 : l'authentification est vérifiée de bout en bout sur le serveur (les 6
+vérifications sont faites) et `apps/mobile` est écrit : toutes les fonctionnalités du web,
+l'authentification, le hors-ligne et le rappel quotidien. Les vérifications automatisables passent
+(typecheck, lint, tests, bundle Hermes) ; il reste la **checklist appareil** (fin de ce fichier), à
+faire sur un téléphone avec un dev-client. Ce fichier résume ce qui a été décidé et retenu, et ce
+qui reste à vérifier.
 
 ## Décisions validées
 
@@ -14,6 +17,11 @@ faites). Aucun code de production n'est écrit. Ce fichier résume ce qui a
 | Utilisateurs | Plusieurs personnes à terme, chacune avec son compte Authelia |
 | Authentification | **OIDC Authelia + jeton Bearer vérifié par nginx** (la sécurité prime sur le confort) |
 | Durée de connexion | **1 mois** (refresh token) |
+| Interface | Expo Router, 4 onglets (Bibliothèque, Révision avec badge, Recherche, Compte) ; StyleSheet et tokens de thème maison (ni NativeWind ni kit de composants) |
+| Tests | Vitest sur la logique pure uniquement ; règle de pureté vérifiée par `src/architecture.test.ts` |
+| Logique du web | Reducers (flashcards, quiz, révision, mode écrit), formulaire de set, formats et erreurs client déplacés dans `@quizlet/shared` : web et mobile importent le même code |
+| Build | Local : JDK 17 + Android SDK, `expo prebuild` puis `expo run:android` (pas d'EAS) ; `android.package` = `com.valldoy.quizlet` |
+| Déconnexion | Révocation du refresh token puis effacement local ; la session Authelia du navigateur survit |
 
 ## Authentification : OIDC Authelia + Bearer
 
@@ -111,7 +119,19 @@ sans authentification, alors que tout le vhost est derrière `auth_request`.
   `Remote-*` uniquement » et ajoute du code d'authentification dans l'API.
 - **WebView / PWA** : écartées au profit d'une app Expo.
 
-## Propositions (pas encore discutées en détail)
+## Hors-ligne, notifications, Expo (retenu et implémenté)
+
+Implémentation du hors-ligne (`apps/mobile/src/offline`) : cache TanStack persisté dans un fichier
+(`Paths.document/offline/query-cache.v1.json`, repli AsyncStorage) ; chaque note est une mutation
+`['review','grade']` à `scope` unique `review-grade` (rejeu dans l'ordre), persistée tant qu'elle est
+en cours, `reviewedAt` pris au tap. Envoi bloqué tant que la session n'est pas `signedIn` et que le
+propriétaire n'est pas vérifié par un `/api/me` frais (une note d'un compte n'est jamais envoyée avec
+le jeton d'un autre). Réessais illimités sur erreur réseau ou session expirée, plafonnés sur 5xx ;
+un 4xx définitif abandonne la note. Côté API, une note postérieure à `last_review` est appliquée,
+sinon elle est ignorée (`ignored: true`, rien n'est écrit) : le rejeu est idempotent. `ts-fsrs` lève
+sur un temps écoulé négatif : le chemin sans `reviewedAt` utilise `max(now, lastReview)`.
+
+## Propositions initiales (conservées pour mémoire)
 
 ### Hors-ligne : réviser seulement
 
@@ -144,9 +164,12 @@ sans authentification, alors que tout le vhost est derrière `auth_request`.
 - Réutiliser `hc<AppType>`, `@quizlet/shared` et TanStack Query. Ne jamais importer `ts-fsrs` dans
   l'app.
 - Development build (pas Expo Go), à cause du schéma `quizlet://` et des modules natifs. APK
-  construit en local ou avec EAS Build.
-- Expo SDK 54 ou plus : pnpm en `node_modules` isolés y est pris en charge, et Metro se configure
-  seul pour les monorepos (depuis le SDK 52). Ne pas passer à `nodeLinker: hoisted` sans en
+  construit en local (JDK 17 + Android SDK, `npx expo prebuild --platform android` puis
+  `npx expo run:android` depuis `apps/mobile` ; APK : `cd android && ./gradlew assembleRelease`,
+  signé avec la clé debug du gabarit, suffisant pour l'installation directe). Windows : activer les
+  chemins longs (`LongPathsEnabled`) ou monter le dépôt avec `subst` si CMake/Ninja échoue.
+- Expo SDK 58 (RN 0.88, Hermes) : pnpm en `node_modules` isolés est pris en charge, et Metro se
+  configure seul pour les monorepos. Ne pas passer à `nodeLinker: hoisted` sans en
   discuter : ça changerait l'installation de tout le monorepo.
 - Distribution : APK direct, puis Play Store en test fermé quand il y aura plusieurs personnes.
 - EAS Update pousse le JS sans réinstallation. Un changement natif demande toujours un nouvel APK.
@@ -356,12 +379,48 @@ construit le bundle sans téléphone) et le typecheck. En cas d'échec, ne pas p
 
 ## Ordre de travail
 
-1. **Test de l'auth, sans app** : vérifications 1 à 4 ci-dessus. En cas d'échec, revoir le choix
-   avant d'écrire du code mobile.
+1. **Test de l'auth, sans app** : vérifications 1 à 4 ci-dessus. *(Fait.)*
 2. **API** : `reviewedAt`, route relais `/api/mobile/callback` et son exception CSRF, avec tests.
-3. **`apps/mobile` minimal** : connexion, bibliothèque en lecture, révision en ligne.
-4. Révision hors-ligne.
-5. Notifications locales.
+   *(Fait ; à déployer sur le serveur avant tout test d'auth sur appareil.)*
+3. **`apps/mobile`** : connexion, toutes les fonctionnalités du web. *(Fait.)*
+4. Révision hors-ligne. *(Fait.)*
+5. Notifications locales. *(Fait.)*
+6. **Checklist appareil** ci-dessous. *(À faire.)*
+
+## Checklist appareil
+
+Prérequis : API déployée avec le relais et l'exception CSRF ; JDK 17 et Android SDK installés ;
+`apps/mobile/.env` rempli (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_AUTH_URL`,
+`EXPO_PUBLIC_OIDC_CLIENT_ID`, voir `.env.example`) ; dev-client installé (`npx expo run:android`) et
+Metro lancé (`pnpm --filter @quizlet/mobile start`, `adb reverse tcp:8081 tcp:8081` si besoin).
+
+- **Avant tout** : ouvrir DevTools sur le `form_post` d'Authelia (étape 4 de « Obtenir un jeton à
+  la main ») et relever `Origin`, `Sec-Fetch-Site` et `Referrer-Policy`. Si `Origin: null`, ajouter
+  `'null'` à l'exception CSRF dans `apps/api/src/app.ts`.
+- **Auth** : le 302 vers `quizlet://callback` dans le Custom Tab (plan B si Chrome le refuse : page
+  200 avec `<meta http-equiv="refresh">` et lien visible) ; succès, annulation, fermeture manuelle
+  du Custom Tab, app tuée pendant le Custom Tab (reprise à froid), déconnexion puis reconnexion,
+  démarrage à froid connecté et déconnecté, lien `quizlet://callback` à froid et à chaud.
+- **Rotation du refresh token** : mettre temporairement `access_token: '2m'` (test 3 ci-dessus),
+  utiliser l'app longtemps : un seul refresh visible côté Authelia.
+- **Hermes** (écran Diagnostics, visible en dev-client) : `Intl.supportedValuesOf`,
+  `Intl.DateTimeFormat({ timeZone })`, `normalize('NFD')` + `\p{M}` / `\p{P}` (mode écrit),
+  `toLocale*`, un appel `api.me.$get()`.
+- **Hors ligne** : mode avion, 10 notes, retour du réseau : envoi dans l'ordre, aucun doublon dans
+  `review_logs` ; tuer l'app en plein envoi puis relancer ; téléphone décalé de plus de 5 minutes
+  (note ramenée à l'heure du serveur) ; se déconnecter avec des notes en attente puis se connecter
+  avec un autre compte : la note n'est pas envoyée.
+- **Notifications** : dialogue Android 13 après création du canal, heure approximative (alarme
+  inexacte), tap à froid et à chaud, redémarrage du téléphone, permission refusée, économiseur de
+  batterie. Vérifier la fusion du manifeste (`POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`).
+- **Écrans** : clavier en edge-to-edge (éditeur, import, mode écrit), TalkBack (annonces des
+  cartes, une seule lecture par retournement), police 1,3, « réduire les animations », import UTF-8
+  avec BOM accepté et ISO-8859-1 refusé (1 Mo), formats français (« 9 octobre 2026 »,
+  « 1 200 cartes »), éditeur avec 2000 cartes, fluidité du retournement, bannières (double marge
+  haute avec la barre d'état ?), `dismissTo` depuis les écrans de set et d'import, thème sombre.
+- **Limites connues** : une réponse de refresh perdue alors que le serveur a fait tourner le jeton
+  force une reconnexion ; une seule case de révocation en attente ; une réponse perdue après une
+  note datée dans le futur (téléphone en avance de plus de 5 minutes) peut l'appliquer deux fois.
 
 ## Sources
 
