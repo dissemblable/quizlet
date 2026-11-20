@@ -3,6 +3,7 @@ import { and, asc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm
 import { createEmptyCard } from 'ts-fsrs'
 import type { Db, Executor } from '../db/client'
 import { cardReviews, cards, reviewLogs, sets, type User } from '../db/schema'
+import { notBefore, resolveReviewedAt } from '../domain/grading'
 import { decideAccess } from '../domain/permissions'
 import {
   createScheduler,
@@ -45,11 +46,12 @@ function toQueueCard(
   scheduler: Scheduler,
   now: Date,
 ): QueueCard {
-  const fsrsCard = toFsrsCard(review, now)
+  // Prévisions jamais datées d'avant la dernière révision (voir `notBefore`).
+  const at = notBefore(now, review?.lastReview)
   return {
     ...card,
     state: review?.state ?? 'new',
-    intervals: previewDue(scheduler, fsrsCard, now),
+    intervals: previewDue(scheduler, toFsrsCard(review, at), at),
   }
 }
 
@@ -152,15 +154,46 @@ export async function dueCardIds(db: Db, user: User, now: Date, setId: string) {
   return rows.map((row) => row.id)
 }
 
+export interface GradeResult {
+  state: CardState
+  due: Date
+  requeue: boolean
+  card: QueueCard | null
+  /** Note non appliquée (périmée, déjà reçue ou trop ancienne) : rien n'a été écrit. */
+  ignored: boolean
+}
+
+const ignoredGrade = (state: CardState, due: Date): GradeResult => ({
+  state,
+  due,
+  requeue: false,
+  card: null,
+  ignored: true,
+})
+
 /**
  * Note une carte (1 À revoir à 4 Facile) : nouvel état FSRS de la carte pour cet utilisateur et
  * entrée d'historique. La carte doit appartenir à un set visible (le sien, ou un set public).
  * `requeue` : la carte est encore due aujourd'hui (étape d'apprentissage), à revoir dans la séance.
+ *
+ * `reviewedAt` (ISO UTC, facultatif) date la note, voir `resolveReviewedAt`. Fourni, la note est
+ * ignorée (`ignored`, sans rien écrire) si elle a plus de 30 jours, ou si elle n'est pas
+ * postérieure à la dernière révision de la carte : un rejeu identique ne s'applique jamais deux
+ * fois et les notes prises hors ligne s'appliquent dans l'ordre. Absent (web), aucune garde.
+ * `now` reste l'horloge des bornes du jour, de `requeue` et des prévisions.
  */
-export async function gradeCard(db: Db, user: User, cardId: string, rating: Rating, now: Date) {
+export async function gradeCard(
+  db: Db,
+  user: User,
+  cardId: string,
+  rating: Rating,
+  now: Date,
+  reviewedAt?: string,
+): Promise<GradeResult> {
   const settings = await effectiveSettings(db, user)
   const scheduler = createScheduler(settings.desiredRetention)
   const { end } = await dayBounds(db, now, settings.timezone)
+  const { at, provided, stale } = resolveReviewedAt(reviewedAt, now)
 
   return db.transaction(async (tx) => {
     const [found] = await tx
@@ -172,16 +205,31 @@ export async function gradeCard(db: Db, user: User, cardId: string, rating: Rati
       throw notFound('Carte introuvable.')
     }
 
+    const key = and(eq(cardReviews.userId, user.id), eq(cardReviews.cardId, cardId))
+    if (stale) {
+      // Sans ligne, la carte est nouvelle et due maintenant, comme à sa première note.
+      const [existing] = await tx.select().from(cardReviews).where(key)
+      return ignoredGrade(existing?.state ?? 'new', existing?.due ?? now)
+    }
+
     // Ligne créée si besoin (carte nouvelle), puis verrouillée : deux notes simultanées de la même
     // carte s'appliquent l'une après l'autre.
-    const key = and(eq(cardReviews.userId, user.id), eq(cardReviews.cardId, cardId))
     await tx
       .insert(cardReviews)
-      .values({ userId: user.id, cardId, ...fromFsrsCard(createEmptyCard(now)) })
+      .values({ userId: user.id, cardId, ...fromFsrsCard(createEmptyCard(at)) })
       .onConflictDoNothing()
     const [current] = await tx.select().from(cardReviews).where(key).for('update')
 
-    const { card: next, log } = scheduler.next(toFsrsCard(current, now), now, rating)
+    // `<=` : un rejeu identique (même `reviewedAt`) est ignoré lui aussi.
+    const lastReview = current?.lastReview ?? null
+    if (current && provided && lastReview !== null && at <= lastReview) {
+      return ignoredGrade(current.state, current.due)
+    }
+
+    // Sans `reviewedAt` (web), jamais avant la dernière révision (voir `notBefore`) ; avec, `at`
+    // lui est déjà postérieur : cet appel n'y change rien.
+    const reviewTime = notBefore(at, lastReview)
+    const { card: next, log } = scheduler.next(toFsrsCard(current, reviewTime), reviewTime, rating)
     const fields = fromFsrsCard(next)
     await tx.update(cardReviews).set(fields).where(key)
     await tx.insert(reviewLogs).values({ userId: user.id, cardId, ...fromFsrsLog(log) })
@@ -192,6 +240,7 @@ export async function gradeCard(db: Db, user: User, cardId: string, rating: Rati
       due: next.due,
       requeue,
       card: requeue ? toQueueCard(found.card, fields, scheduler, now) : null,
+      ignored: false,
     }
   })
 }

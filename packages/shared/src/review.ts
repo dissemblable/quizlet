@@ -30,7 +30,15 @@ export const settingsSchema = z.object({
 
 export type SettingsInput = z.input<typeof settingsSchema>
 
-export const gradeSchema = z.object({ rating: z.literal(RATINGS) })
+/**
+ * Note d'une carte. `reviewedAt` (ISO 8601 UTC, avec le « Z ») est l'heure de la note côté client :
+ * l'app mobile la renseigne pour les notes prises hors ligne. Absent, le serveur prend l'heure
+ * courante (cas du web). Les bornes sont appliquées par l'API (`domain/grading.ts`).
+ */
+export const gradeSchema = z.object({
+  rating: z.literal(RATINGS),
+  reviewedAt: z.iso.datetime().optional(),
+})
 
 export const cardIdParamSchema = z.object({ cardId: z.uuid() })
 

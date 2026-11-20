@@ -8,7 +8,8 @@ import { useTestDb } from '../test/test-db'
 const db = useTestDb()
 
 const MINUTE = 60_000
-const DAY = 24 * 60 * MINUTE
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
 let clock = new Date('2026-10-13T08:00:00Z')
 let request: ReturnType<typeof createTestClient>['request']
 
@@ -21,6 +22,7 @@ interface GradeJson {
   due: string
   requeue: boolean
   card: { id: string; intervals: string[] } | null
+  ignored: boolean
 }
 
 beforeEach(() => {
@@ -47,11 +49,11 @@ async function queueAs(username: string, setId?: string) {
   return { status: res.status, body: await readJson<QueueJson>(res) }
 }
 
-async function grade(username: string, cardId: string, rating: number) {
+async function grade(username: string, cardId: string, rating: number, reviewedAt?: string) {
   const res = await request(`/api/review/cards/${cardId}`, {
     method: 'POST',
     as: username,
-    body: { rating },
+    body: reviewedAt === undefined ? { rating } : { rating, reviewedAt },
   })
   return { status: res.status, body: await readJson<GradeJson>(res) }
 }
@@ -95,12 +97,17 @@ describe('notation (POST /api/review/cards/:cardId)', () => {
 
     const good = await grade('alice', first?.id ?? '', 3)
     expect(good.status).toBe(200)
-    expect(good.body).toMatchObject({ state: 'learning', requeue: true })
+    expect(good.body).toMatchObject({ state: 'learning', requeue: true, ignored: false })
     expect(new Date(good.body.due)).toEqual(new Date(clock.getTime() + 10 * MINUTE))
     expect(good.body.card?.intervals).toHaveLength(4)
 
     const easy = await grade('alice', second?.id ?? '', 4)
-    expect(easy.body).toMatchObject({ state: 'review', requeue: false, card: null })
+    expect(easy.body).toMatchObject({
+      state: 'review',
+      requeue: false,
+      card: null,
+      ignored: false,
+    })
     expect(new Date(easy.body.due).getTime() - clock.getTime()).toBeGreaterThanOrEqual(DAY)
 
     const logs = await db.select().from(reviewLogs)
@@ -115,6 +122,210 @@ describe('notation (POST /api/review/cards/:cardId)', () => {
     const set = await createSetAs('alice', 1)
     expect((await grade('alice', set.cards[0]?.id ?? '', 5)).status).toBe(400)
     expect((await grade('alice', '00000000-0000-4000-8000-000000000000', 3)).status).toBe(404)
+  })
+})
+
+const iso = (ms: number) => new Date(ms).toISOString()
+const cardRows = (cardId: string) =>
+  db.select().from(cardReviews).where(eq(cardReviews.cardId, cardId))
+
+/** Un set d'une carte : identifiant de la carte et note (date facultative) en un appel. */
+async function oneCard(username = 'alice') {
+  const [card] = (await createSetAs(username, 1)).cards
+  const cardId = card?.id ?? ''
+  return {
+    cardId,
+    grade: (rating: number, reviewedAt?: string) => grade(username, cardId, rating, reviewedAt),
+  }
+}
+
+describe('notation datée (reviewedAt)', () => {
+  it('applique une note passée à son heure : échéance, dernière révision et historique', async () => {
+    const { cardId, grade } = await oneCard()
+    const at = clock.getTime() - 2 * HOUR
+
+    const res = await grade(3, iso(at))
+    expect(res.status).toBe(200)
+    // Échéance déjà dépassée : la carte reste dans la file du jour.
+    expect(res.body).toMatchObject({ state: 'learning', requeue: true, ignored: false })
+    expect(new Date(res.body.due)).toEqual(new Date(at + 10 * MINUTE))
+
+    const [review] = await cardRows(cardId)
+    expect(review).toMatchObject({ state: 'learning', reps: 1 })
+    expect(review?.lastReview).toEqual(new Date(at))
+    expect(review?.due).toEqual(new Date(at + 10 * MINUTE))
+    const logs = await db.select().from(reviewLogs)
+    expect(logs.map((log) => log.reviewedAt)).toEqual([new Date(at)])
+  })
+
+  it('garde telle quelle une note datée jusqu’à 5 minutes dans le futur', async () => {
+    const { cardId, grade } = await oneCard()
+    const at = clock.getTime() + 5 * MINUTE
+
+    expect((await grade(3, iso(at))).body.ignored).toBe(false)
+    expect((await cardRows(cardId))[0]?.lastReview).toEqual(new Date(at))
+  })
+
+  it('ramène à maintenant une note datée au-delà de la tolérance', async () => {
+    const { cardId, grade } = await oneCard()
+
+    const res = await grade(3, iso(clock.getTime() + 5 * MINUTE + 1))
+    expect(res.body).toMatchObject({ state: 'learning', ignored: false })
+    expect(new Date(res.body.due)).toEqual(new Date(clock.getTime() + 10 * MINUTE))
+    expect((await cardRows(cardId))[0]?.lastReview).toEqual(clock)
+    expect((await db.select().from(reviewLogs))[0]?.reviewedAt).toEqual(clock)
+  })
+
+  it('ignore une note de plus de 30 jours : carte nouvelle, rien n’est écrit', async () => {
+    const { cardId, grade } = await oneCard()
+
+    const res = await grade(3, iso(clock.getTime() - 30 * DAY - 1))
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ state: 'new', requeue: false, card: null, ignored: true })
+    expect(new Date(res.body.due)).toEqual(clock)
+    expect(await cardRows(cardId)).toEqual([])
+    expect(await db.select().from(reviewLogs)).toEqual([])
+  })
+
+  it('ignore une note périmée sur une carte commencée : état renvoyé, rien n’est modifié', async () => {
+    const { cardId, grade } = await oneCard()
+    await insertReview('alice', cardId, new Date(clock.getTime() + 2 * DAY))
+    const before = await cardRows(cardId)
+
+    const res = await grade(1, iso(clock.getTime() - 40 * DAY))
+    expect(res.body).toMatchObject({ state: 'review', requeue: false, card: null, ignored: true })
+    expect(new Date(res.body.due)).toEqual(new Date(clock.getTime() + 2 * DAY))
+    expect(await cardRows(cardId)).toEqual(before)
+    expect(await db.select().from(reviewLogs)).toEqual([])
+  })
+
+  it('applique une note de 30 jours pile', async () => {
+    const { grade } = await oneCard()
+    expect((await grade(3, iso(clock.getTime() - 30 * DAY))).body.ignored).toBe(false)
+  })
+
+  it('ignore le rejeu identique d’une note : un seul historique, carte inchangée', async () => {
+    const { cardId, grade } = await oneCard()
+    const reviewedAt = iso(clock.getTime() - HOUR)
+
+    const first = await grade(3, reviewedAt)
+    const after = await cardRows(cardId)
+    clock = new Date(clock.getTime() + HOUR) // la réponse s'est perdue : le rejeu arrive plus tard
+    const replay = await grade(3, reviewedAt)
+
+    expect(first.body.ignored).toBe(false)
+    expect(replay.status).toBe(200)
+    expect(replay.body).toMatchObject({
+      state: first.body.state,
+      due: first.body.due,
+      requeue: false,
+      card: null,
+      ignored: true,
+    })
+    expect(await cardRows(cardId)).toEqual(after)
+    expect(await db.select().from(reviewLogs)).toHaveLength(1)
+  })
+
+  it('applique deux notes dans l’ordre de leurs dates', async () => {
+    const { cardId, grade } = await oneCard()
+    const first = clock.getTime() - HOUR
+    const second = first + 20 * MINUTE
+
+    expect((await grade(3, iso(first))).body.ignored).toBe(false)
+    expect((await grade(3, iso(second))).body).toMatchObject({ state: 'review', ignored: false })
+
+    const logs = await db.select().from(reviewLogs).orderBy(reviewLogs.reviewedAt)
+    expect(logs.map(({ state, reviewedAt }) => ({ state, reviewedAt }))).toEqual([
+      { state: 'new', reviewedAt: new Date(first) },
+      { state: 'learning', reviewedAt: new Date(second) },
+    ])
+    expect((await cardRows(cardId))[0]?.lastReview).toEqual(new Date(second))
+  })
+
+  it('ignore la note la plus ancienne quand elle arrive après une plus récente', async () => {
+    const { cardId, grade } = await oneCard()
+    const older = clock.getTime() - HOUR
+    const newer = older + 20 * MINUTE
+
+    expect((await grade(3, iso(newer))).body.ignored).toBe(false)
+    const after = await cardRows(cardId)
+    const late = await grade(1, iso(older))
+
+    expect(late.body).toMatchObject({ state: 'learning', ignored: true })
+    expect(await cardRows(cardId)).toEqual(after)
+    expect(await db.select().from(reviewLogs)).toHaveLength(1)
+  })
+
+  it('compte une note datée d’hier pour hier : le quota du jour reste entier', async () => {
+    await saveSettings('alice', { newCardsPerDay: 1 })
+    const set = await createSetAs('alice', 3)
+    const [yesterday, today] = set.cards
+
+    await grade('alice', yesterday?.id ?? '', 4, iso(clock.getTime() - DAY))
+    expect((await queueAs('alice')).body.counts.new).toBe(1)
+
+    await grade('alice', today?.id ?? '', 4)
+    expect((await queueAs('alice')).body.counts.new).toBe(0)
+  })
+
+  it('refuse un reviewedAt mal formé (400), sans rien écrire', async () => {
+    const { cardId } = await oneCard()
+    const invalid = ['2026-10-13T08:00:00+02:00', '2026-10-13T08:00:00', '2026-10-13', 'hier', '']
+    for (const reviewedAt of [...invalid, 1_760_342_400_000, null]) {
+      const res = await request(`/api/review/cards/${cardId}`, {
+        method: 'POST',
+        as: 'alice',
+        body: { rating: 3, reviewedAt },
+      })
+      expect(res.status, String(reviewedAt)).toBe(400)
+      expect(await readJson(res)).toMatchObject({ error: { code: 'VALIDATION_ERROR' } })
+    }
+    expect(await cardRows(cardId)).toEqual([])
+  })
+
+  it('traite la carte privée d’un autre comme inconnue (404), même avec une note périmée', async () => {
+    const { cardId } = await oneCard('alice')
+    for (const reviewedAt of [iso(clock.getTime() - 40 * DAY), iso(clock.getTime() - HOUR)]) {
+      expect((await grade('bob', cardId, 3, reviewedAt)).status).toBe(404)
+    }
+    expect(await db.select().from(cardReviews)).toEqual([])
+    expect(await db.select().from(reviewLogs)).toEqual([])
+  })
+
+  // Note mobile datée dans la tolérance de 5 min, puis note du web (sans reviewedAt) : l'horloge du
+  // serveur est en retard sur `last_review`. À cheval sur minuit UTC, ts-fsrs lève (temps écoulé
+  // négatif) : la note web et les prévisions de la file doivent s'en protéger.
+  it.each([
+    ['le même jour UTC', '2026-10-13T08:00:00Z'],
+    ['à cheval sur minuit UTC', '2026-10-13T23:58:00Z'],
+  ])('applique la note web qui suit une note mobile datée dans 2 minutes, %s', async (_, start) => {
+    clock = new Date(start)
+    const { cardId, grade } = await oneCard()
+    const mobileAt = iso(clock.getTime() + 2 * MINUTE)
+
+    const mobile = await grade(1, mobileAt)
+    expect(mobile.status).toBe(200)
+    expect(mobile.body).toMatchObject({ state: 'learning', requeue: true, ignored: false })
+    expect(mobile.body.card?.intervals).toHaveLength(4)
+
+    const web = await grade(1)
+    expect(web.status).toBe(200)
+    expect(web.body).toMatchObject({ state: 'learning', ignored: false })
+
+    // L'heure de la note web est ramenée à la dernière révision, jamais avant.
+    const logs = await db.select().from(reviewLogs)
+    expect(logs.map((log) => log.reviewedAt)).toEqual([new Date(mobileAt), new Date(mobileAt)])
+    expect((await cardRows(cardId))[0]?.lastReview).toEqual(new Date(mobileAt))
+
+    // Le rejeu identique de la note mobile est ignoré.
+    const replay = await grade(1, mobileAt)
+    expect(replay.body).toMatchObject({ state: 'learning', ignored: true })
+    expect(await db.select().from(reviewLogs)).toHaveLength(2)
+
+    // La file (prévisions datées de `now`, en retard sur `last_review`) répond normalement.
+    const queue = await queueAs('alice')
+    expect(queue.status).toBe(200)
+    expect(queue.body.cards.map((card) => card.id)).toEqual([cardId])
   })
 })
 
