@@ -1,7 +1,8 @@
 # App mobile — notes de conception
 
-État au 2026-11-16 : réflexion seulement, rien n'est implémenté. Ce fichier résume ce qui a été
-décidé, ce qui est proposé et ce qui reste à vérifier.
+État au 2026-11-20 : l'authentification est vérifiée de bout en bout (les 6 vérifications sont
+faites). Aucun code de production n'est écrit. Ce fichier résume ce qui a
+été décidé, ce qui est proposé et ce qui reste à vérifier.
 
 ## Décisions validées
 
@@ -35,23 +36,41 @@ App ─Bearer authelia_at_…─▶ Cloudflare → nginx ─auth_request─▶ A
   Authelia habituel.
 - **Client OIDC** : client public (`token_endpoint_auth_method: 'none'`), Authorization Code avec
   PKCE S256 et PAR obligatoires, scopes `authelia.bearer.authz` et `offline_access` uniquement,
-  consentement `explicit`, `audience` limitée à `https://quizlet.valldoy.com`. L'`audience`
-  empêche un jeton volé d'ouvrir les autres applications du stack. Pas de scope `openid`
-  (interdit avec `authelia.bearer.authz`) : l'app connaît l'utilisateur par `/api/me`.
-- **Endpoint `auth-request`** : ajouter le schéma `Bearer` à une stratégie d'en-tête, en gardant
-  `CookieSession` pour le web. Deux possibilités, à trancher pendant le test :
-  `HeaderAuthorization` (en-tête `Authorization`) ou `HeaderAuthRequestProxyAuthorization` (en-tête
-  `Proxy-Authorization`, celle de l'exemple de la doc Authelia). Cet endpoint sert toutes les
-  applications du stack : n'y faire que des ajouts.
+  consentement `explicit`, `audience` limitée à `https://quizlet.valldoy.com`. Pas de scope
+  `openid` (interdit avec `authelia.bearer.authz`) : l'app connaît l'utilisateur par `/api/me`.
+- **Audience et `resource`** (vérifié le 2026-11-20) : Authelia compare l'`audience` du jeton à
+  l'URL **exacte** de la requête, donc `audience=https://quizlet.valldoy.com` seule ne couvre pas
+  `/api/me` (log : « the granted audience and resource does not match the request »). Le PAR doit
+  aussi envoyer `resource=https://quizlet.valldoy.com/api` : `resource` (RFC 8707) se compare par
+  schéma, hôte et préfixe de chemin. Aucune option de configuration supplémentaire n'est nécessaire.
+  Résultat : le jeton ouvre `/api/*` de quizlet, mais ni `/` de quizlet ni les autres applications
+  du stack (testé sur `whoami`). Un jeton volé ne sert donc qu'à cette API.
+- **Endpoint `auth-request`** : `HeaderAuthorization` avec le schéma `Bearer`, en gardant
+  `CookieSession` pour le web (vérifié : `Proxy-Authorization` n'est pas utile, et sans en-tête ou
+  avec un faux jeton le comportement web reste un 302 vers le portail). Cet endpoint sert toutes
+  les applications du stack : n'y faire que des ajouts.
 - **Jetons** : access token court (environ 1 h), refresh token d'un mois. Ils sont stockés dans
   `expo-secure-store` (Keystore), jamais dans AsyncStorage. Le défaut d'Authelia (refresh token de
   90 min) ne convient pas : durée propre au client via `lifespans.custom` et la clé `lifespan`.
-- **Déconnexion** : révoquer le refresh token chez Authelia, puis effacer le stockage local.
+  Vérifié : le refresh token est **glissant** (chaque refresh en émet un nouveau avec la durée
+  complète : l'usage régulier ne reconnecte jamais) et **rotaté** (l'ancien est refusé). Rejouer
+  un refresh token déjà consommé **révoque toute la famille** (l'access token et le refresh token
+  courants meurent aussi) : l'app ne doit jamais rafraîchir deux fois avec le même jeton
+  (sérialiser les refresh, un seul à la fois). Les jetons survivent à un redémarrage d'Authelia.
+- **Déconnexion** : révoquer le refresh token chez Authelia (`revocation_endpoint`, client
+  public : `client_id` et `token`, réponse 200), puis effacer le stockage local. Vérifié : le
+  refresh token révoqué est refusé et l'access token associé cesse de fonctionner.
 - **Retrait d'un utilisateur** : Authelia consulte la base des comptes à chaque requête, donc
   retirer un compte coupe l'accès de l'app.
 - **Expiration** : le snippet nginx du stack transforme tout 401 d'Authelia en 302
   (`error_page 401 =302`). L'app traite 401 et 302 de la même façon : rafraîchir le jeton, sinon
-  relancer la connexion.
+  relancer la connexion. Avec un jeton valide mais refusé (audience, expiré), la réponse est un 302
+  avec un `Location` vide et un en-tête `www-authenticate: Bearer error="invalid_token"`.
+- **Refresh mort** : un refresh token révoqué ou révoqué par réutilisation renvoie un **HTTP 500
+  `server_error`** (log : « error revoking oauth2 access token session … no rows affected »), pas
+  un 400 `invalid_grant`. Un refresh token simplement déjà consommé renvoie bien un 400
+  `invalid_grant` (cas de l'expiration naturelle non testé). L'app traite les deux comme « se reconnecter » (pour le 500, un seul nouvel
+  essai suffit à écarter une panne passagère).
 - **Configuration Authelia** : faite à la main sur le serveur, avec des snippets dans le README
   (règle de CLAUDE.md). Configuration de départ dans la section « Vérifications » : clés relues
   dans la doc d'Authelia le 2026-11-16, à valider avec `authelia validate-config`.
@@ -139,13 +158,24 @@ sans authentification, alors que tout le vhost est derrière `auth_request`.
 Les points 1 à 4 se vérifient sur le serveur, une fois le provider OIDC configuré (étape 1 du
 plan). Les points 5 et 6 se vérifient à la création de `apps/mobile` (étape 3).
 
-- [ ] 1. Un jeton Bearer obtenu en 2FA passe la règle `two_factor`, `Remote-User` arrive jusqu'à
-  l'API, et l'`audience` bloque les autres applications du stack.
-- [ ] 2. Cloudflare laisse passer un client natif.
-- [ ] 3. Le refresh token : durée glissante ou absolue, et rotation.
-- [ ] 4. Les jetons survivent à un redémarrage d'Authelia.
-- [ ] 5. Le `fetch` de React Native et `redirect: 'manual'`.
-- [ ] 6. Metro, pnpm et les paquets du workspace en source TS.
+- [x] 1. Un jeton Bearer obtenu en 2FA passe la règle `two_factor`, `Remote-User` arrive jusqu'à
+  l'API, et l'`audience` bloque les autres applications du stack. *(2026-11-20, après ajout de
+  `resource` au PAR, voir « Audience et `resource` ».)*
+- [x] 2. Cloudflare laisse passer un client natif. *(2026-11-20 : `/api/me` et le endpoint token
+  répondent normalement avec le user-agent `okhttp/4.12.0`.)*
+- [x] 3. Le refresh token : durée glissante, rotation, et réutilisation = famille révoquée.
+  *(2026-11-20.)*
+- [x] 4. Les jetons survivent à un redémarrage d'Authelia. *(2026-11-20 : access token et refresh
+  token émis avant le redémarrage fonctionnent après.)*
+- [x] 5. Le `fetch` de React Native et `redirect: 'manual'`. *(2026-11-20, Android, Expo Go SDK 58 :
+  le `fetch` global et `expo/fetch` respectent l'option. Faux jeton sur `/api/me` : `status` 302,
+  `type` `default` (pas `opaqueredirect`), `url` inchangée, en-tête `Location` lisible vers
+  `auth.valldoy.com`, `content-type` `text/html`. L'app détecte donc l'expiration avec
+  `res.status === 302` (ou 401), sans lire `res.type`.)*
+- [x] 6. Metro, pnpm et les paquets du workspace en source TS. *(2026-11-20 : `expo export
+  --platform android` (703 modules), typecheck, lint et tests du monorepo passent ; le bundle ne
+  contient ni `ts-fsrs` ni le code de l'API ; Expo Go affiche bien une constante et un schéma Zod
+  de `@quizlet/shared`. `nodeLinker` inchangé.)*
 
 > **Attention** : chaque redémarrage d'Authelia déconnecte toutes les sessions web du stack (elles
 > sont en mémoire). Faire ces tests à un moment calme. Ne jamais committer les vraies valeurs des
@@ -242,6 +272,7 @@ STATE=$(openssl rand -hex 16); echo "$STATE"
 curl -s "$PAR_URL" -d client_id=quizlet-mobile -d response_type=code -d response_mode=form_post \
   --data-urlencode redirect_uri="$CB" --data-urlencode 'scope=authelia.bearer.authz offline_access' \
   --data-urlencode audience=https://quizlet.valldoy.com \
+  --data-urlencode resource=https://quizlet.valldoy.com/api \
   -d code_challenge="$CHALLENGE" -d code_challenge_method=S256 -d state="$STATE"
 ```
 
@@ -272,8 +303,10 @@ curl -si -H "Authorization: Bearer $AT" https://<autre-app>.valldoy.com/        
 ```
 
 En cas de 302 sur la première commande, lire `docker compose logs authelia` (niveau 2FA, audience,
-stratégie). Puis essayer la variante `HeaderAuthRequestProxyAuthorization`, avec
-`-H "Proxy-Authorization: Bearer $AT"`.
+stratégie). Le message « the granted audience and resource does not match » signifie que le PAR
+n'a pas envoyé `resource=https://quizlet.valldoy.com/api` (voir « Audience et `resource` »).
+`HeaderAuthRequestProxyAuthorization` (`-H "Proxy-Authorization: Bearer $AT"`) n'a pas été
+nécessaire.
 
 **2. Cloudflare** : les commandes ci-dessus passent déjà par Cloudflare. Refaire la première avec
 le user-agent du `fetch` Android (OkHttp) :
@@ -297,10 +330,12 @@ curl -s "$TOKEN_URL" -d grant_type=refresh_token -d client_id=quizlet-mobile \
 
 1. À T0, obtenir des jetons.
 2. À T0 + 6 min, rafraîchir avec la commande ci-dessus : on obtient un nouveau refresh token, RT2.
-3. Rejouer l'ancien `RT` : il doit être refusé (rotation).
-4. À T0 + 12 min, rafraîchir avec RT2.
+3. À T0 + 12 min, rafraîchir avec RT2.
    - Si ça marche, la durée est glissante : quelqu'un qui utilise l'app ne se reconnecte jamais.
    - Si ça échoue, la durée est absolue : tout le monde se reconnecte chaque mois.
+4. Seulement ensuite, rejouer un ancien refresh token encore valide : il doit être refusé
+   (rotation). Attention : Authelia révoque alors toute la famille de jetons, donc ce rejeu avant
+   l'étape 3 fausserait son résultat. Résultat obtenu : glissant, rotation confirmée.
 5. Remettre `1h` et `30d`.
 
 **4. Redémarrage d'Authelia** : avec un `AT` et un `RT` valides, lancer
