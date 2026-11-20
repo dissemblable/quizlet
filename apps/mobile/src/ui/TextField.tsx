@@ -1,6 +1,18 @@
-import type { ReactNode, Ref } from 'react'
-import type { StyleProp, TextInput, TextInputProps, TextStyle, ViewStyle } from 'react-native'
-import type { IconName } from './Icon'
+import { type ComponentRef, type ReactNode, type Ref, useState } from 'react'
+import {
+  type StyleProp,
+  StyleSheet,
+  TextInput,
+  type TextInputProps,
+  type TextStyle,
+  View,
+  type ViewStyle,
+} from 'react-native'
+import { Icon, type IconName } from './Icon'
+import { counterText } from './logic'
+import { Text } from './Text'
+import { useTheme } from './theme'
+import { fontSize, radius, spacing } from './tokens'
 
 export interface TextFieldProps
   extends Omit<
@@ -44,11 +56,147 @@ export interface TextFieldProps
   inputStyle?: StyleProp<TextStyle>
 }
 
+const LINE_HEIGHT = 22
+const PADDING_V = spacing.md
+
 /**
  * CONTRAT : champ de saisie thémé (libellé, aide, erreur, compteur). Toutes les props de
  * `TextInput` passent (`placeholder`, `keyboardType`, `autoCapitalize`, `autoFocus`,
  * `returnKeyType`, `onSubmitEditing`, `editable`, `onBlur`…).
  */
-export function TextField(_props: TextFieldProps) {
-  return null
+export function TextField({
+  label,
+  labelHidden = false,
+  value,
+  onChangeText,
+  error,
+  helper,
+  multiline = false,
+  minLines = 3,
+  maxLength,
+  showCounter = false,
+  inputRef,
+  icon,
+  right,
+  monospace = false,
+  style,
+  inputStyle,
+  onFocus,
+  onBlur,
+  editable = true,
+  accessibilityHint,
+  ...inputProps
+}: TextFieldProps) {
+  const { colors } = useTheme()
+  const [focused, setFocused] = useState(false)
+  const hasError = error !== undefined && error !== ''
+  const message = hasError ? error : helper
+  const borderColor = hasError ? colors.destructive : focused ? colors.ring : colors.outline
+  // Bordure de 2 dp au focus : le padding perd 1 dp pour que le champ ne bouge pas.
+  const borderWidth = focused || hasError ? 2 : 1
+
+  return (
+    <View style={[styles.root, style]}>
+      {labelHidden ? null : (
+        <Text variant="label" importantForAccessibility="no">
+          {label}
+        </Text>
+      )}
+      <View
+        style={[
+          styles.box,
+          {
+            backgroundColor: colors.card,
+            borderColor,
+            borderWidth,
+            paddingHorizontal: spacing.md - (borderWidth - 1),
+            alignItems: multiline ? 'flex-start' : 'center',
+          },
+          !editable && styles.disabled,
+        ]}
+      >
+        {icon !== undefined ? (
+          <Icon
+            name={icon}
+            size={18}
+            color={colors.mutedForeground}
+            style={multiline ? styles.multilineIcon : undefined}
+          />
+        ) : null}
+        <TextInput
+          {...inputProps}
+          // Le type public `TextInput` (contrat) diffère de l'instance native attendue par `ref`.
+          ref={inputRef as Ref<ComponentRef<typeof TextInput>>}
+          value={value}
+          onChangeText={onChangeText}
+          multiline={multiline}
+          maxLength={maxLength}
+          editable={editable}
+          accessibilityLabel={label}
+          accessibilityHint={accessibilityHint ?? message}
+          placeholderTextColor={colors.mutedForeground}
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
+          underlineColorAndroid="transparent"
+          onFocus={(event) => {
+            setFocused(true)
+            onFocus?.(event)
+          }}
+          onBlur={(event) => {
+            setFocused(false)
+            onBlur?.(event)
+          }}
+          style={[
+            styles.input,
+            { color: colors.foreground },
+            multiline && {
+              minHeight: minLines * LINE_HEIGHT + 2 * PADDING_V,
+              textAlignVertical: 'top',
+            },
+            monospace && { fontFamily: 'monospace' },
+            inputStyle,
+          ]}
+        />
+        {right}
+      </View>
+      {message !== undefined || (showCounter && maxLength !== undefined) ? (
+        <View style={styles.footer}>
+          {message !== undefined ? (
+            <Text
+              variant="caption"
+              tone={hasError ? 'destructive' : 'muted'}
+              accessibilityLiveRegion={hasError ? 'polite' : 'none'}
+              style={styles.message}
+            >
+              {message}
+            </Text>
+          ) : null}
+          {showCounter && maxLength !== undefined ? (
+            <Text variant="caption" tone="muted" importantForAccessibility="no">
+              {counterText(value.length, maxLength)}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  )
 }
+
+const styles = StyleSheet.create({
+  root: { gap: spacing.xs },
+  box: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: PADDING_V,
+    fontSize: fontSize.base,
+    lineHeight: LINE_HEIGHT,
+  },
+  multilineIcon: { marginTop: PADDING_V + 2 },
+  disabled: { opacity: 0.6 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  message: { flex: 1 },
+})

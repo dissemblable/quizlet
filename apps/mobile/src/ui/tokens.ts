@@ -1,7 +1,16 @@
 import type { Rating } from '@quizlet/shared'
 
 // CONTRAT : jetons de thème PURS (aucun import React ni react-native : testables sous Node).
-// Valeurs hex calculées depuis les jetons oklch de `apps/web/src/index.css` (à revérifier à l'œil).
+// Hex calculés depuis les jetons oklch de `apps/web/src/index.css` ; conversion oklch vers sRGB
+// revérifiée par script : les hex d'origine sont exacts (`destructive` sombre sort à peine du
+// gamut sRGB et est écrêté).
+//
+// Écarts volontaires, imposés par le contraste WCAG (voir `contrast.test.ts`) :
+// - `warning` clair `#b45309` devient `#a64a07` : 4,27:1 sur sa surface à 10 % (seuil 4,5:1) ;
+// - `info` sombre `#38bdf8` devient `#4ac5fa` : 4,38:1 sur sa surface posée sur une carte ;
+// - `outline` (nouveau, absent du web) : contour des contrôles (champ, case, radio, interrupteur,
+//   bouton « outline »), au moins 3:1 (WCAG 1.4.11). `border` et `input` gardent les valeurs du web
+//   (~1,4:1) : ils ne servent qu'aux filets et aux cartes, décoratifs.
 
 export type ColorScheme = 'light' | 'dark'
 /** Préférence de l'utilisateur ; `system` suit le thème d'Android. */
@@ -27,8 +36,12 @@ export interface Colors {
   accentForeground: string
   destructive: string
   destructiveForeground: string
+  /** Filets et bordures de cartes (décoratifs, faible contraste comme sur le web). */
   border: string
+  /** Fond/bordure discrète du web, conservée pour parité (décorative). */
   input: string
+  /** Contour des contrôles interactifs (champ, case, radio, interrupteur) : au moins 3:1. */
+  outline: string
   /** Anneau de focus (champ actif). */
   ring: string
   success: string
@@ -60,9 +73,10 @@ export const lightColors: Colors = {
   destructiveForeground: '#ffffff',
   border: '#cbd5e5',
   input: '#c3cee2',
+  outline: '#7a86a1',
   ring: '#3d66df',
   success: '#047857',
-  warning: '#b45309',
+  warning: '#a64a07',
   info: '#0369a1',
   successSurface: '#10b9811a',
   warningSurface: '#f59e0b1a',
@@ -88,10 +102,11 @@ export const darkColors: Colors = {
   destructiveForeground: '#182b23',
   border: '#edebe221',
   input: '#edebe22e',
+  outline: '#929f95',
   ring: '#f6da6f',
   success: '#34d399',
   warning: '#fbbf24',
-  info: '#38bdf8',
+  info: '#4ac5fa',
   successSurface: '#10b9811a',
   warningSurface: '#f59e0b1a',
   infoSurface: '#0ea5e91a',

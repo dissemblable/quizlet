@@ -1,14 +1,20 @@
 import { AccessibilityInfo, Alert, ToastAndroid } from 'react-native'
+import { shortenToast } from './logic'
 
-/** Retours brefs (`ToastAndroid`, lus par TalkBack). Les erreurs restent plus longtemps. */
+/**
+ * Retours brefs (`ToastAndroid`, lus par TalkBack). `SHORT` dure ~2 s, `LONG` ~3,5 s : le système
+ * coupe un message trop long, alors garder des phrases courtes (tronquées à 120 caractères ici).
+ * Les erreurs restent plus longtemps.
+ */
 export const toast = {
-  success: (message: string) => ToastAndroid.show(message, ToastAndroid.SHORT),
-  info: (message: string) => ToastAndroid.show(message, ToastAndroid.SHORT),
-  error: (message: string) => ToastAndroid.show(message, ToastAndroid.LONG),
+  success: (message: string) => ToastAndroid.show(shortenToast(message), ToastAndroid.SHORT),
+  info: (message: string) => ToastAndroid.show(shortenToast(message), ToastAndroid.SHORT),
+  error: (message: string) => ToastAndroid.show(shortenToast(message), ToastAndroid.LONG),
 }
 
 /** Annonce `message` aux lecteurs d'écran (TalkBack) sans rien afficher. */
 export function announce(message: string): void {
+  if (message.trim() === '') return
   AccessibilityInfo.announceForAccessibility(message)
 }
 
@@ -19,7 +25,10 @@ export interface ConfirmOptions {
   confirmLabel?: string
   /** Défaut : « Annuler ». */
   cancelLabel?: string
-  /** Bouton de confirmation en rouge (suppressions). */
+  /**
+   * Bouton de confirmation en rouge (suppressions). Sans effet sur Android : `Alert` ignore le
+   * style `destructive`, le libellé doit donc dire l'action (« Supprimer »).
+   */
   destructive?: boolean
 }
 
