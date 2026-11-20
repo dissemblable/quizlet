@@ -5,6 +5,11 @@
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["node"]
-  }
+    "isolatedModules": true,
+    // Obligatoire : Babel ne peut pas élider un ré-export de type sans `type`, et Metro casse.
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src/**/*", "*.ts"]
 }
