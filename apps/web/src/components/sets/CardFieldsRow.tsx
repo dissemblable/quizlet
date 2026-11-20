@@ -1,9 +1,9 @@
+import type { SetFormValues } from '@quizlet/shared'
 import { ArrowDownIcon, ArrowUpIcon, Trash2Icon } from 'lucide-react'
 import type { FieldErrors, UseFormRegister } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import type { SetFormValues } from '@/lib/set-form'
 
 interface CardFieldsRowProps {
   index: number

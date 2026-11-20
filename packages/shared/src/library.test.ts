@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { libraryParams, readLibraryFilters } from './library'
 
+// Le package n'a pas les types DOM : un `get` minimal tient lieu de `URLSearchParams`.
+const params = (values: Record<string, string> = {}) => ({
+  get: (name: string) => values[name] ?? null,
+})
+
 describe('filtres de la bibliothèque', () => {
   it("lit les filtres de l'URL avec des valeurs par défaut", () => {
-    expect(readLibraryFilters(new URLSearchParams())).toEqual({
+    expect(readLibraryFilters(params())).toEqual({
       q: '',
       folder: undefined,
       tags: [],
       page: 1,
     })
-    expect(readLibraryFilters(new URLSearchParams('q=chim&folder=none&tags=a,b&page=3'))).toEqual({
+    expect(
+      readLibraryFilters(params({ q: 'chim', folder: 'none', tags: 'a,b', page: '3' })),
+    ).toEqual({
       q: 'chim',
       folder: 'none',
       tags: ['a', 'b'],
@@ -19,7 +26,7 @@ describe('filtres de la bibliothèque', () => {
 
   it('ignore une page invalide', () => {
     for (const page of ['0', '-2', '1.5', 'abc']) {
-      expect(readLibraryFilters(new URLSearchParams({ page })).page).toBe(1)
+      expect(readLibraryFilters(params({ page })).page).toBe(1)
     }
   })
 

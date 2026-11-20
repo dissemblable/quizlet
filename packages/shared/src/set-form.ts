@@ -1,13 +1,6 @@
-import {
-  LIMITS,
-  MESSAGES,
-  type SetInput,
-  tagNameSchema,
-  titleSchema,
-  type Visibility,
-  visibilitySchema,
-} from '@quizlet/shared'
 import { z } from 'zod'
+import { LIMITS, MESSAGES, type Visibility } from './constants'
+import { type SetInput, tagNameSchema, titleSchema, visibilitySchema } from './sets'
 
 /**
  * Carte telle qu'éditée dans le formulaire. L'identifiant s'appelle `cardId` : `useFieldArray`

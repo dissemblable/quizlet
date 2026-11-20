@@ -1,9 +1,15 @@
-import type { ImportSeparators, Rating, SetInput, SettingsInput } from '@quizlet/shared'
+import {
+  type ImportSeparators,
+  type LibraryFilters,
+  libraryParams,
+  type Rating,
+  type SetInput,
+  type SettingsInput,
+  unwrap,
+} from '@quizlet/shared'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { InferResponseType } from 'hono/client'
 import { api } from './api'
-import { unwrap } from './http'
-import { libraryParams } from './library'
 
 export type SetDetail = InferResponseType<(typeof api.sets)[':id']['$get'], 200>['set']
 export type SetSummary = InferResponseType<typeof api.sets.$get, 200>['sets'][number]
@@ -11,14 +17,6 @@ export type FolderSummary = InferResponseType<typeof api.folders.$get, 200>['fol
 export type TagSummary = InferResponseType<typeof api.tags.$get, 200>['tags'][number]
 export type QueueCard = InferResponseType<typeof api.review.queue.$get, 200>['cards'][number]
 export type Settings = InferResponseType<typeof api.settings.$get, 200>['settings']
-
-/** Filtres de la bibliothèque (reflétés dans l'URL). `folder` : identifiant, ou « none ». */
-export interface LibraryFilters {
-  q: string
-  folder?: string
-  tags: string[]
-  page: number
-}
 
 export const queryKeys = {
   me: ['me'] as const,

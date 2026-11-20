@@ -1,4 +1,4 @@
-import { LIMITS } from '@quizlet/shared'
+import { LIMITS } from './constants'
 
 /** Deux cartes d'exemple, au format que l'import détecte (point-virgule entre terme et définition). */
 export const PROMPT_EXAMPLE_LINES = [

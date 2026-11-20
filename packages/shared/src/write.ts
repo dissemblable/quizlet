@@ -1,11 +1,12 @@
-import { type RandomFn, shuffle } from '@quizlet/shared'
+import { type RandomFn, shuffle } from './random'
 
 /** Forme comparable d'une réponse : sans casse, accents, ponctuation ni espaces superflus. */
 export function normalizeForComparison(text: string): string {
+  // Comme `normalizeAnswer` : pas de `toLocaleLowerCase` (Hermes), même résultat en français.
   return text
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
-    .toLocaleLowerCase('fr-FR')
+    .toLowerCase()
     .replace(/\p{P}/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -87,7 +88,7 @@ interface CardLike {
   definition: string
 }
 
-export function buildQuestions(
+export function buildWriteQuestions(
   cards: readonly CardLike[],
   { direction, shuffle: shuffled }: WriteOptions,
   random: RandomFn = Math.random,
@@ -132,15 +133,15 @@ export function writeReducer(state: WriteState, action: WriteAction): WriteState
   }
 }
 
-export function isCorrect(answer: WriteAnswer): boolean {
+export function isWriteCorrect(answer: WriteAnswer): boolean {
   return answer.result !== 'wrong' || answer.overridden
 }
 
-export function scoreOf(state: WriteState) {
-  const correct = state.answers.filter(isCorrect).length
+export function writeScoreOf(state: WriteState) {
+  const correct = state.answers.filter(isWriteCorrect).length
   return {
     correct,
     total: state.questions.length,
-    mistakes: state.answers.filter((a) => !isCorrect(a)),
+    mistakes: state.answers.filter((a) => !isWriteCorrect(a)),
   }
 }

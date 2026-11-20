@@ -1,5 +1,5 @@
+import { ApiError } from '@quizlet/shared'
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
-import { ApiError } from './http'
 import { markSessionExpired } from './session'
 
 function onError(error: unknown) {

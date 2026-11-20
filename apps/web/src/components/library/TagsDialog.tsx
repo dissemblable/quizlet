@@ -1,3 +1,4 @@
+import { errorMessage, pluralize } from '@quizlet/shared'
 import { Settings2Icon, Trash2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,8 +10,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { pluralize } from '@/lib/format'
-import { errorMessage } from '@/lib/http'
 import { type TagSummary, useDeleteTag } from '@/lib/queries'
 
 /** Liste de mes tags, avec suppression (les tags se créent dans l'éditeur de set). */

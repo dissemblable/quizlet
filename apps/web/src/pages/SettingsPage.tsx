@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   DEFAULT_SETTINGS,
+  errorMessage,
   SETTINGS_LIMITS,
   type SettingsInput,
   settingsSchema,
@@ -15,7 +16,6 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { pageTitle } from '@/config'
-import { errorMessage } from '@/lib/http'
 import { type Settings, useSaveSettings, useSettings } from '@/lib/queries'
 
 export function SettingsPage() {

@@ -1,13 +1,11 @@
-import { LIMITS } from '@quizlet/shared'
+import { errorMessage, LIMITS, pluralize } from '@quizlet/shared'
 import { SearchIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { pluralize } from '@/lib/format'
 import { useDebouncedValue } from '@/lib/hooks'
-import { errorMessage } from '@/lib/http'
 import { useSearchSets } from '@/lib/queries'
 
 /** Recherche globale dans mes sets (titre, description, tags, cartes), ouverte par Ctrl/Cmd+K. */

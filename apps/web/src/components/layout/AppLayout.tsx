@@ -1,7 +1,7 @@
+import { ApiError } from '@quizlet/shared'
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { ErrorState, LoadingState } from '@/components/states'
-import { ApiError } from '@/lib/http'
 import { useMe, useSaveSettings, useSettings } from '@/lib/queries'
 import { Header } from './Header'
 import { SessionExpiredBanner } from './SessionExpiredBanner'

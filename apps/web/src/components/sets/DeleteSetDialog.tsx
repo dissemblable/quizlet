@@ -1,3 +1,4 @@
+import { errorMessage } from '@quizlet/shared'
 import { Loader2Icon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -14,7 +15,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { errorMessage } from '@/lib/http'
 import { useDeleteSet } from '@/lib/queries'
 
 export function DeleteSetDialog({ setId, title }: { setId: string; title: string }) {

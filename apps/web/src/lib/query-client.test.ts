@@ -1,5 +1,5 @@
+import { ApiError } from '@quizlet/shared'
 import { describe, expect, it } from 'vitest'
-import { ApiError } from './http'
 import { shouldRetry } from './query-client'
 
 describe('shouldRetry', () => {

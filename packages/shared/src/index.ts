@@ -1,4 +1,5 @@
 export { type ApiErrorBody, ERROR_CODES, type ErrorCode, isApiErrorBody } from './api'
+export { ApiError, type ClientErrorCode, errorMessage, toApiError, unwrap } from './client-errors'
 export {
   CARD_STATES,
   type CardState,
@@ -16,6 +17,18 @@ export {
   type Visibility,
 } from './constants'
 export {
+  currentCardId,
+  type FlashcardMark,
+  type FlashcardsAction,
+  type FlashcardsProgress,
+  type FlashcardsState,
+  flashcardsReducer,
+  initFlashcards,
+  progressOf,
+  reviewIds,
+} from './flashcards'
+export { formatDate, formatNumber, initials, pluralize } from './format'
+export {
   detectSeparators,
   type ImportedCard,
   type ImportPreview,
@@ -24,7 +37,22 @@ export {
   parseCards,
   utf8Size,
 } from './import'
+export { type LibraryFilters, libraryParams, readLibraryFilters } from './library'
+export { CLAUDE_PROMPT, PROMPT_EXAMPLE_LINES } from './prompt'
 export { countDistinctDefinitions, normalizeAnswer } from './quiz'
+export {
+  currentQuestion,
+  initQuiz,
+  mistakesOf,
+  type QuizAction,
+  type QuizMistake,
+  type QuizQuestion,
+  type QuizScore,
+  type QuizState,
+  quizReducer,
+  quizScoreOf,
+  verdict,
+} from './quiz-session'
 export { type RandomFn, seededRandom, shuffle } from './random'
 export {
   cardIdParamSchema,
@@ -35,6 +63,26 @@ export {
   type SettingsInput,
   settingsSchema,
 } from './review'
+export {
+  formatInterval,
+  initReviewSession,
+  isIntervalStale,
+  RATING_LABELS,
+  type ReviewAction,
+  type ReviewSessionState,
+  reviewReducer,
+} from './review-session'
+export {
+  type CardFormValues,
+  countFilledCards,
+  emptyCard,
+  newSetFormValues,
+  type SetFormOutput,
+  type SetFormValues,
+  setFormSchema,
+  setToFormValues,
+  toSetInput,
+} from './set-form'
 export {
   type CardInput,
   cardInputSchema,
@@ -53,3 +101,21 @@ export {
   titleSchema,
   visibilitySchema,
 } from './sets'
+export {
+  type AnswerResult,
+  allowedTypos,
+  buildWriteQuestions,
+  checkAnswer,
+  initWrite,
+  isWriteCorrect,
+  levenshtein,
+  normalizeForComparison,
+  type WriteAction,
+  type WriteAnswer,
+  type WriteDirection,
+  type WriteOptions,
+  type WriteQuestion,
+  type WriteState,
+  writeReducer,
+  writeScoreOf,
+} from './write'

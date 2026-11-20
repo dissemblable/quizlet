@@ -1,21 +1,43 @@
-import { seededRandom } from '@quizlet/shared'
 import { describe, expect, it } from 'vitest'
+import { seededRandom } from './random'
 import {
   allowedTypos,
-  buildQuestions,
+  buildWriteQuestions,
   checkAnswer,
   initWrite,
   levenshtein,
   normalizeForComparison,
-  scoreOf,
   type WriteAction,
   writeReducer,
+  writeScoreOf,
 } from './write'
 
 describe('normalizeForComparison', () => {
   it('ignore la casse, les accents, la ponctuation et les espaces multiples', () => {
     expect(normalizeForComparison('  Élève,  à   l’ÉCOLE ! ')).toBe('eleve a l ecole')
     expect(normalizeForComparison('Saint-Étienne')).toBe(normalizeForComparison('saint etienne'))
+  })
+
+  it('reste identique à la version qui utilisait toLocaleLowerCase fr-FR', () => {
+    const legacy = (text: string) =>
+      text
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLocaleLowerCase('fr-FR')
+        .replace(/\p{P}/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    for (const text of [
+      'ÉLÈVE À L’ÉCOLE',
+      'ŒUVRE',
+      'İSTANBUL',
+      'ΟΔΥΣΣΕΥΣ',
+      'ǅ',
+      'ẞ',
+      'Saint-Étienne',
+    ]) {
+      expect(normalizeForComparison(text)).toBe(legacy(text))
+    }
   })
 })
 
@@ -62,11 +84,11 @@ const cards = [
   { id: '3', term: 'Espagne', definition: 'Madrid' },
 ]
 
-describe('buildQuestions', () => {
+describe('buildWriteQuestions', () => {
   it('affiche le terme ou la définition selon le sens choisi', () => {
-    const fromTerm = buildQuestions(cards, { direction: 'term', shuffle: false })
+    const fromTerm = buildWriteQuestions(cards, { direction: 'term', shuffle: false })
     expect(fromTerm[0]).toEqual({ cardId: '1', shown: 'term', prompt: 'France', answer: 'Paris' })
-    const fromDefinition = buildQuestions(cards, { direction: 'definition', shuffle: false })
+    const fromDefinition = buildWriteQuestions(cards, { direction: 'definition', shuffle: false })
     expect(fromDefinition[0]).toMatchObject({
       shown: 'definition',
       prompt: 'Paris',
@@ -80,7 +102,7 @@ describe('buildQuestions', () => {
       term: `t${i}`,
       definition: `d${i}`,
     }))
-    const mixed = buildQuestions(many, { direction: 'mixed', shuffle: true }, seededRandom(3))
+    const mixed = buildWriteQuestions(many, { direction: 'mixed', shuffle: true }, seededRandom(3))
     expect(new Set(mixed.map((question) => question.shown))).toEqual(
       new Set(['term', 'definition']),
     )
@@ -95,7 +117,7 @@ describe('session du mode écrit', () => {
   const play = (actions: WriteAction[]) =>
     actions.reduce(
       writeReducer,
-      initWrite(buildQuestions(cards, { direction: 'term', shuffle: false })),
+      initWrite(buildWriteQuestions(cards, { direction: 'term', shuffle: false })),
     )
 
   it('corrige chaque réponse puis passe à la suivante', () => {
@@ -116,7 +138,7 @@ describe('session du mode écrit', () => {
       { type: 'next' },
     ])
     expect(state.finished).toBe(true)
-    const { correct, total, mistakes } = scoreOf(state)
+    const { correct, total, mistakes } = writeScoreOf(state)
     expect({ correct, total }).toEqual({ correct: 2, total: 3 })
     expect(mistakes.map((mistake) => mistake.given)).toEqual(['Milan'])
   })

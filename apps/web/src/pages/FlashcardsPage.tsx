@@ -1,4 +1,14 @@
 import {
+  currentCardId,
+  type FlashcardsAction,
+  type FlashcardsState,
+  flashcardsReducer,
+  initFlashcards,
+  pluralize,
+  progressOf,
+  reviewIds,
+} from '@quizlet/shared'
+import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CheckIcon,
@@ -16,16 +26,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { pageTitle } from '@/config'
-import {
-  currentCardId,
-  type FlashcardsAction,
-  type FlashcardsState,
-  flashcardsReducer,
-  initFlashcards,
-  progressOf,
-  reviewIds,
-} from '@/lib/flashcards'
-import { pluralize } from '@/lib/format'
 import type { SetDetail } from '@/lib/queries'
 import { useShortcuts } from '@/lib/use-shortcuts'
 import { SetQueryStates, useSetFromRoute } from '@/pages/SetPage'

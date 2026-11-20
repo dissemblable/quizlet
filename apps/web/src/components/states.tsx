@@ -1,9 +1,9 @@
+import { errorMessage } from '@quizlet/shared'
 import { AlertCircleIcon, RotateCwIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { errorMessage } from '@/lib/http'
 
 /** Squelette de page pendant un chargement (annoncé aux lecteurs d'écran). */
 export function LoadingState({

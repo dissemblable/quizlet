@@ -1,4 +1,3 @@
-import { seededRandom } from '@quizlet/shared'
 import { describe, expect, it } from 'vitest'
 import {
   currentCardId,
@@ -9,6 +8,7 @@ import {
   progressOf,
   reviewIds,
 } from './flashcards'
+import { seededRandom } from './random'
 
 const ids = ['a', 'b', 'c', 'd']
 const run = (state: FlashcardsState, ...actions: FlashcardsAction[]) =>

@@ -1,7 +1,7 @@
+import { pluralize } from '@quizlet/shared'
 import { BrainIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { pluralize } from '@/lib/format'
 import { useReviewSummary } from '@/lib/queries'
 
 /** Accueil : nombre de cartes de la révision du jour, et accès direct à la séance. */

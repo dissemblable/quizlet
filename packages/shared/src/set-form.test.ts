@@ -1,5 +1,5 @@
-import { LIMITS, MESSAGES, setInputSchema } from '@quizlet/shared'
 import { describe, expect, it } from 'vitest'
+import { LIMITS, MESSAGES } from './constants'
 import {
   countFilledCards,
   newSetFormValues,
@@ -7,6 +7,7 @@ import {
   setToFormValues,
   toSetInput,
 } from './set-form'
+import { setInputSchema } from './sets'
 
 const messagesOf = (values: unknown) =>
   setFormSchema

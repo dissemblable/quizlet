@@ -1,6 +1,6 @@
-import { type RandomFn, shuffle } from '@quizlet/shared'
+import { type RandomFn, shuffle } from './random'
 
-export type Mark = 'known' | 'review'
+export type FlashcardMark = 'known' | 'review'
 
 export interface FlashcardsState {
   /** Toutes les cartes du set, dans l'ordre du set. */
@@ -12,7 +12,7 @@ export interface FlashcardsState {
   index: number
   flipped: boolean
   shuffled: boolean
-  marks: Record<string, Mark>
+  marks: Record<string, FlashcardMark>
   finished: boolean
 }
 
@@ -20,7 +20,7 @@ export type FlashcardsAction =
   | { type: 'flip' }
   | { type: 'next' }
   | { type: 'previous' }
-  | { type: 'mark'; mark: Mark }
+  | { type: 'mark'; mark: FlashcardMark }
   | { type: 'toggleShuffle'; random?: RandomFn }
   | { type: 'restart'; onlyReview?: boolean; random?: RandomFn }
 

@@ -1,9 +1,11 @@
 import {
   detectSeparators,
+  errorMessage,
   IMPORT_MAX_BYTES,
   LIMITS,
   MESSAGES,
   parseCards,
+  pluralize,
   utf8Size,
 } from '@quizlet/shared'
 import { Loader2Icon, LockIcon, UploadIcon } from 'lucide-react'
@@ -26,8 +28,6 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { pageTitle } from '@/config'
-import { pluralize } from '@/lib/format'
-import { errorMessage } from '@/lib/http'
 import { type SetDetail, useImportCards, useSet } from '@/lib/queries'
 import { SetQueryStates } from '@/pages/SetPage'
 

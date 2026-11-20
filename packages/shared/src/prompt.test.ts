@@ -1,5 +1,5 @@
-import { detectSeparators, parseCards } from '@quizlet/shared'
 import { describe, expect, it } from 'vitest'
+import { detectSeparators, parseCards } from './import'
 import { CLAUDE_PROMPT, PROMPT_EXAMPLE_LINES } from './prompt'
 
 describe('prompt à copier', () => {

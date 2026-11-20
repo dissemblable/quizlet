@@ -52,7 +52,7 @@ export interface QuizScore {
   percent: number
 }
 
-export function scoreOf(state: QuizState): QuizScore {
+export function quizScoreOf(state: QuizState): QuizScore {
   const total = state.questions.length
   let correct = 0
   let answered = 0

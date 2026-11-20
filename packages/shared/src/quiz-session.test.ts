@@ -7,9 +7,9 @@ import {
   type QuizQuestion,
   type QuizState,
   quizReducer,
-  scoreOf,
+  quizScoreOf,
   verdict,
-} from './quiz'
+} from './quiz-session'
 
 const questions: QuizQuestion[] = [
   { cardId: '1', term: 'France', choices: ['Rome', 'Paris', 'Madrid', 'Berlin'], answerIndex: 1 },
@@ -22,7 +22,7 @@ describe('session de quiz', () => {
   it('commence à la première question, sans réponse', () => {
     const state = initQuiz(questions)
     expect(currentQuestion(state)?.term).toBe('France')
-    expect(scoreOf(state)).toEqual({ correct: 0, answered: 0, total: 3, percent: 0 })
+    expect(quizScoreOf(state)).toEqual({ correct: 0, answered: 0, total: 3, percent: 0 })
   })
 
   it('n’accepte qu’une réponse par question', () => {
@@ -60,7 +60,7 @@ describe('session de quiz', () => {
     )
     expect(state.finished).toBe(true)
     expect(currentQuestion(state)).toBeUndefined()
-    expect(scoreOf(state)).toEqual({ correct: 2, answered: 3, total: 3, percent: 67 })
+    expect(quizScoreOf(state)).toEqual({ correct: 2, answered: 3, total: 3, percent: 67 })
     expect(mistakesOf(state)).toEqual([
       { question: questions[1], chosen: 'Berlin', expected: 'Rome' },
     ])

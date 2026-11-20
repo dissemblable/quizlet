@@ -1,4 +1,14 @@
-import { RATINGS, type Rating } from '@quizlet/shared'
+import {
+  errorMessage,
+  formatInterval,
+  initReviewSession,
+  pluralize,
+  RATING_LABELS,
+  RATINGS,
+  type Rating,
+  type ReviewSessionState,
+  reviewReducer,
+} from '@quizlet/shared'
 import { CalendarCheckIcon, ChevronLeftIcon, RotateCcwIcon } from 'lucide-react'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -8,16 +18,7 @@ import { Flashcard } from '@/components/study/Flashcard'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { pageTitle } from '@/config'
-import { pluralize } from '@/lib/format'
-import { errorMessage } from '@/lib/http'
 import { type QueueCard, type SetDetail, useGradeCard, useReviewQueue, useSet } from '@/lib/queries'
-import {
-  formatInterval,
-  initReviewSession,
-  RATING_LABELS,
-  type ReviewSessionState,
-  reviewReducer,
-} from '@/lib/review'
 import { useShortcuts } from '@/lib/use-shortcuts'
 import { SetQueryStates } from '@/pages/SetPage'
 
@@ -102,7 +103,12 @@ function ReviewSession({
   back: { to: string; label: string }
   onRestart: () => void
 }) {
-  const [state, dispatch] = useReducer(reviewReducer, cards, initReviewSession)
+  // Reducer générique : on fixe le type des cartes pour que `state.queue` reste un `QueueCard[]`.
+  const [state, dispatch] = useReducer(
+    reviewReducer<QueueCard>,
+    cards,
+    initReviewSession<QueueCard>,
+  )
   const grade = useGradeCard()
   const cardButton = useRef<HTMLButtonElement>(null)
   const current = state.queue[0]
@@ -198,7 +204,7 @@ function ReviewRecap({
   back,
   onRestart,
 }: {
-  state: ReviewSessionState
+  state: ReviewSessionState<QueueCard>
   back: { to: string; label: string }
   onRestart: () => void
 }) {
