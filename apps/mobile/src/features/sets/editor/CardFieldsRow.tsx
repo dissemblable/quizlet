@@ -66,6 +66,7 @@ export const CardFieldsRow = memo(function CardFieldsRow({
       </View>
       <TextField
         label="Terme"
+        accessibilityLabel={`Terme, carte ${number}`}
         multiline
         minLines={2}
         value={term.field.value}
@@ -77,6 +78,7 @@ export const CardFieldsRow = memo(function CardFieldsRow({
       />
       <TextField
         label="Définition"
+        accessibilityLabel={`Définition, carte ${number}`}
         multiline
         minLines={2}
         value={definition.field.value}

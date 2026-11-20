@@ -26,6 +26,9 @@ export interface OfflineStatus {
   online: boolean
   /** Notes en attente d'envoi (persistées). */
   pendingGrades: number
-  /** Restauration du cache persisté en cours (afficher le chargement, pas « hors ligne »). */
+  /**
+   * Restauration du cache persisté en cours (afficher le chargement, pas « hors ligne ») : la
+   * notation reste désactivée tant qu'elle dure (ordre des notes), voir `useOfflineStatus`.
+   */
   restoring: boolean
 }

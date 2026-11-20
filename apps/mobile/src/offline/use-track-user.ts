@@ -11,7 +11,9 @@ import { useIsOnline } from './use-online'
 /**
  * CONTRAT : mémorise le propriétaire du cache hors ligne (`quizlet.offline.owner.v1`). Si
  * `userId` diffère du propriétaire stocké, purge d'abord le cache et la file de notes. Appelé par
- * `AppGate` avec `useMe().data?.user.id` (`undefined` tant que /api/me n'a pas répondu).
+ * `AppGate` avec `me.data?.user.id` (`const me = useMe()`, réponse de `GET /api/me` : `{ user: { id } }` ;
+ * `undefined` tant qu'elle n'est pas arrivée). Le même chemin sert à `ownerIdFromMe` (note) et à la
+ * porte d'envoi (`fetchUserId`) : `me.user.id`.
  */
 export function useTrackUser(userId: string | undefined): void {
   const client = useQueryClient()

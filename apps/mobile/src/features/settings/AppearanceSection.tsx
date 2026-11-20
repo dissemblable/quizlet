@@ -10,11 +10,6 @@ const OPTIONS: ReadonlyArray<RadioOption<ThemePreference>> = [
 export function AppearanceSection() {
   const { preference, setPreference } = useTheme()
   return (
-    <RadioGroup
-      label="Apparence"
-      value={preference}
-      onValueChange={setPreference}
-      options={OPTIONS}
-    />
+    <RadioGroup label="Thème" value={preference} onValueChange={setPreference} options={OPTIONS} />
   )
 }

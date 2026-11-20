@@ -1,4 +1,4 @@
-// CONTRAT : barrel GELÉ (aucun lot n'en est propriétaire). Chemins et noms d'export des écrans fixes.
+// CONTRAT : barrel des écrans de sets, consommé par les routes. Chemins et noms d'export figés.
 export { SetScreen } from './detail/SetScreen'
 export { EditSetScreen } from './editor/EditSetScreen'
 export { NewSetScreen } from './editor/NewSetScreen'

@@ -72,9 +72,10 @@ export function ImportPreview({
               Définition
             </Text>
           </View>
-          {preview.cards.map((card) => (
+          {preview.cards.map((card, index) => (
             <View
-              key={card.line}
+              // biome-ignore lint/suspicious/noArrayIndexKey: aperçu figé, jamais réordonné ; l'index lève un doublon de ligne éventuel.
+              key={`${card.line}-${index}`}
               accessible
               accessibilityLabel={`Ligne ${card.line}, terme : ${card.term}, définition : ${card.definition}`}
               style={[styles.row, styles.ruled]}
@@ -105,8 +106,9 @@ export function ImportPreview({
           <Text variant="label" weight="medium" accessibilityRole="header">
             Lignes ignorées à l'import
           </Text>
-          {preview.invalid.map((line) => (
-            <Text key={line.line} variant="label">
+          {preview.invalid.map((line, index) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: liste figée, jamais réordonnée ; l'index lève un doublon de ligne éventuel.
+            <Text key={`${line.line}-${index}`} variant="label">
               <Text variant="label" weight="medium">
                 Ligne {line.line}
               </Text>{' '}

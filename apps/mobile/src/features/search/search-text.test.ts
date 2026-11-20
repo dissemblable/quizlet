@@ -4,6 +4,7 @@ import {
   noResultMessage,
   referenceLabel,
   resultSubtitle,
+  SEARCH_HINT,
   SEARCH_LABEL,
   SEARCH_PLACEHOLDER,
   searchAnnouncement,
@@ -13,6 +14,9 @@ describe('textes de la recherche', () => {
   it('reprend le libellé du web', () => {
     expect(SEARCH_LABEL).toBe("Titre, description, tag ou contenu d'une carte")
     expect(SEARCH_PLACEHOLDER).toBe("Titre, description, tag ou contenu d'une carte…")
+    expect(SEARCH_HINT).toBe(
+      'Entrée ouvre le premier résultat. Accents pris en compte, casse ignorée. Un lien ou un identifiant de set est aussi accepté.',
+    )
     expect(noResultMessage('zzz')).toBe('Aucun set ne correspond à « zzz ».')
   })
 

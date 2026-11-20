@@ -13,7 +13,7 @@ export function choiceStatus(
 }
 
 /** Ce que le web ajoute en texte masqué (lecteurs d'écran) à côté du choix. */
-export function choiceStatusSuffix(status: ChoiceStatus): string {
+function choiceStatusSuffix(status: ChoiceStatus): string {
   if (status === 'correct') return ' (bonne réponse)'
   if (status === 'wrong') return ' (votre réponse)'
   return ''

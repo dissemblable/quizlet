@@ -2,22 +2,25 @@ import { Stack, useRouter } from 'expo-router'
 import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { SetDetail } from '@/lib/queries'
-import { useOfflineStatus } from '@/offline'
-import { Banner, Button, Screen, spacing, Text } from '@/ui'
-import { pendingNotice, reviewTarget } from './session'
+import { Button, Screen, spacing, Text } from '@/ui'
+import { reviewTarget } from './session'
 
 interface ReviewShellProps {
   /** Absent : révision du jour (tous les sets). */
   set?: SetDetail
   /** Barre collée en bas (afficher la réponse, notes). */
   footer?: ReactNode
+  /** Ligne d'info sous le titre (file déduite hors ligne). */
+  notice?: string
   children: ReactNode
 }
 
-/** Cadre commun des états de l'écran : titre, retour, notes en attente de synchronisation. */
-export function ReviewShell({ set, footer, children }: ReviewShellProps) {
+/**
+ * Cadre commun des états de l'écran : titre, retour. Les notes en attente sont déjà montrées par le
+ * bandeau global `OfflineBanner`.
+ */
+export function ReviewShell({ set, footer, notice, children }: ReviewShellProps) {
   const router = useRouter()
-  const { pendingGrades } = useOfflineStatus()
   const target = reviewTarget(set)
 
   return (
@@ -41,7 +44,11 @@ export function ReviewShell({ set, footer, children }: ReviewShellProps) {
               {target.title}
             </Text>
           )}
-          {pendingGrades > 0 ? <Banner tone="info" title={pendingNotice(pendingGrades)} /> : null}
+          {notice ? (
+            <Text variant="label" tone="muted">
+              {notice}
+            </Text>
+          ) : null}
           {children}
         </View>
       </Screen>

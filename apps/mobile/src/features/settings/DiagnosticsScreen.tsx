@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native'
 import { api } from '@/lib/api'
 import { type RuntimeCheck, runRuntimeChecks } from '@/lib/diagnostics'
 import { Badge, Button, Card, ErrorState, LoadingState, Screen, spacing, Text } from '@/ui'
+import { Gallery } from '@/ui/Gallery'
 
 type State =
   | { status: 'running' }
@@ -68,6 +69,8 @@ export function DiagnosticsScreen() {
             </View>
           </Card>
         ))}
+      {/* Galerie des composants (apparence sur appareil) : développement seulement. */}
+      {__DEV__ ? <Gallery /> : null}
     </Screen>
   )
 }

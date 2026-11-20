@@ -5,8 +5,9 @@ import {
   GRADE_WAIT_MS,
   type GradeResponse,
   type GradeVariables,
+  ownerIdFromMe,
 } from './grade-policy'
-import { GRADE_MUTATION_KEY } from './keys'
+import { GRADE_MUTATION_KEY, ME_KEY } from './keys'
 import type { GradeOutcome } from './types'
 
 export interface SubmitGradeDeps {
@@ -49,7 +50,9 @@ export async function submitGrade(
   rating: Rating,
   now: Date = new Date(),
 ): Promise<GradeOutcome> {
-  const variables: GradeVariables = buildGradeVariables(card, rating, now)
+  // Lu au moment du tap : la note garde le compte qui l'a donnée (voir `GradeVariables.ownerId`).
+  const ownerId = ownerIdFromMe(deps.client.getQueryData(ME_KEY))
+  const variables: GradeVariables = buildGradeVariables(card, rating, now, ownerId)
   const observer = new MutationObserver<GradeResponse, Error, GradeVariables>(deps.client, {
     mutationKey: GRADE_MUTATION_KEY,
   })

@@ -23,6 +23,12 @@ export interface Endpoints {
   parEndpoint: string
   /** Facultatif : sans lui, la déconnexion n'est que locale. */
   revocationEndpoint: string | null
+  /**
+   * `authorization_response_iss_parameter_supported` (RFC 9207) : si vrai, le portail renvoie `iss`
+   * à chaque réponse d'autorisation et son absence est une anomalie (un serveur malveillant ou un
+   * intermédiaire qui l'aurait retiré pour contourner le contrôle de l'émetteur).
+   */
+  requiresIssParameter: boolean
 }
 
 /**
@@ -56,6 +62,7 @@ export function parseDiscovery(body: unknown, authUrl: string): Endpoints | null
     tokenEndpoint,
     parEndpoint,
     revocationEndpoint: endpoint('revocation_endpoint'),
+    requiresIssParameter: body.authorization_response_iss_parameter_supported === true,
   }
 }
 

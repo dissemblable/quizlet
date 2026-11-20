@@ -2,7 +2,11 @@ import type { CallbackParams } from './types'
 
 const KEYS = ['code', 'state', 'iss', 'error', 'error_description'] as const
 
-/** `+` = espace dans un formulaire (le relais de l'API encode ainsi `error_description`). */
+/**
+ * Le relais de l'API encode avec `encodeURIComponent` : un espace devient `%20`, jamais `+`. On
+ * accepte quand même `+` (= espace dans un formulaire) par tolérance : un `+` littéral est toujours
+ * envoyé sous la forme `%2B` par le relais, donc la lecture reste sans ambiguïté.
+ */
 function decode(part: string): string {
   const text = part.replace(/\+/g, ' ')
   try {

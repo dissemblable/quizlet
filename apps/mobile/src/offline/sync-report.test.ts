@@ -35,11 +35,11 @@ describe('syncReport', () => {
 
   it('les refus définitifs sont comptés et passent en erreur', () => {
     expect(syncReport({ synced: 2, ignored: 0, dropped: 1 })).toEqual({
-      message: '2 notes synchronisées · 1 note abandonnée (refus définitif du serveur)',
+      message: '2 notes synchronisées · 1 note abandonnée (refus ou panne du serveur)',
       kind: 'error',
     })
     expect(syncReport({ synced: 0, ignored: 0, dropped: 3 })?.message).toBe(
-      '3 notes abandonnées (refus définitif du serveur)',
+      '3 notes abandonnées (refus ou panne du serveur)',
     )
   })
 })

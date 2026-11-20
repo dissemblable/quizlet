@@ -5,7 +5,7 @@
  * révision de la carte (comme `gradeCard` côté API).
  */
 import { ApiError } from '@quizlet/shared'
-import { onlineManager, type QueryClient } from '@tanstack/react-query'
+import { onlineManager, type QueryClient, QueryObserver } from '@tanstack/react-query'
 import { persistQueryClientRestore } from '@tanstack/react-query-persist-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthStatus } from '@/auth/types'
@@ -13,7 +13,7 @@ import { createOfflineClient } from './client-factory'
 import type { KeyValueStorage } from './file-storage'
 import { submitGrade } from './grade-flow'
 import { GradeAbortedError, type GradeResponse, type GradeVariables } from './grade-policy'
-import { GRADE_MUTATION_KEY, REVIEW_SUMMARY_KEY, reviewQueueKey } from './keys'
+import { GRADE_MUTATION_KEY, ME_KEY, REVIEW_SUMMARY_KEY, reviewQueueKey } from './keys'
 import { createOwnerStore } from './owner-store'
 import {
   createDirectPersister,
@@ -22,7 +22,7 @@ import {
   PERSIST_BUSTER,
   serializeClient,
 } from './persist'
-import { createRestoreHandlers } from './restore'
+import { createRestoreHandlers, watchReconnection } from './restore'
 import { createSendGate } from './send-gate'
 import type { SyncReport } from './sync-report'
 
@@ -68,7 +68,10 @@ type Server = ReturnType<typeof createServer>
 
 const clients: QueryClient[] = []
 
-function build(server: Server, overrides: { whenReadyToSend?: () => Promise<void> } = {}) {
+function build(
+  server: Server,
+  overrides: { whenReadyToSend?: (ownerId?: string) => Promise<void> } = {},
+) {
   const reports: SyncReport[] = []
   const client = createOfflineClient({
     postGrade: (variables) => server.post(variables),
@@ -267,7 +270,7 @@ describe('refus définitif (4xx)', () => {
     // Une seule tentative pour le 404 (aucun retry), puis la note suivante est partie.
     expect(server.calls.map((v) => v.cardId)).toEqual(['supprimee', 'c2'])
     expect(reports[0]).toEqual({
-      message: '1 note synchronisée · 1 note abandonnée (refus définitif du serveur)',
+      message: '1 note synchronisée · 1 note abandonnée (refus ou panne du serveur)',
       kind: 'error',
     })
     // La carte refusée ne revient pas dans la file en cache.
@@ -496,52 +499,60 @@ describe('restauration', () => {
   })
 })
 
-describe("porte d'envoi", () => {
-  function gated() {
-    let status: AuthStatus = 'expired'
-    const listeners = new Set<(status: AuthStatus) => void>()
-    const owner = createOwnerStore(memoryStorage())
-    const purge = vi.fn(async () => {
-      await owner.clear()
-    })
-    const fetchUserId = vi.fn(async () => 'alice')
-    const gate = createSendGate({
-      whenAuthenticated: () =>
-        status === 'signedIn'
-          ? Promise.resolve()
-          : new Promise<void>((resolve) => {
-              const listener = (next: AuthStatus) => {
-                if (next !== 'signedIn') return
-                listeners.delete(listener)
-                resolve()
-              }
-              listeners.add(listener)
-            }),
-      subscribeStatus: (listener) => {
-        listeners.add(listener)
-        return () => void listeners.delete(listener)
-      },
-      fetchUserId,
-      owner,
-      purge,
-    })
-    return {
-      gate,
-      owner,
-      purge,
-      fetchUserId,
-      setStatus(next: AuthStatus) {
-        status = next
-        for (const listener of [...listeners]) listener(next)
-      },
-    }
+/** Porte d'envoi réelle, session et utilisateur pilotés à la main. */
+function gated() {
+  let status: AuthStatus = 'expired'
+  const listeners = new Set<(status: AuthStatus) => void>()
+  const owner = createOwnerStore(memoryStorage())
+  const purge = vi.fn(async () => {
+    await owner.clear()
+  })
+  let userId = 'alice'
+  const fetchUserId = vi.fn(async () => userId)
+  const gate = createSendGate({
+    whenAuthenticated: () =>
+      status === 'signedIn'
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            const listener = (next: AuthStatus) => {
+              if (next !== 'signedIn') return
+              listeners.delete(listener)
+              resolve()
+            }
+            listeners.add(listener)
+          }),
+    subscribeStatus: (listener) => {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
+    fetchUserId,
+    owner,
+    purge,
+  })
+  return {
+    gate,
+    owner,
+    purge,
+    fetchUserId,
+    /** Utilisateur renvoyé par `/api/me` (celui du jeton courant). */
+    setUser(next: string) {
+      userId = next
+    },
+    setStatus(next: AuthStatus) {
+      status = next
+      for (const listener of [...listeners]) listener(next)
+    },
   }
+}
 
+describe("porte d'envoi", () => {
   it('aucun envoi tant que la session est expirée, puis la file part à la reconnexion', async () => {
     const server = createServer()
     const g = gated()
     await g.owner.set('alice')
-    const { client } = build(server, { whenReadyToSend: () => g.gate.whenReadyToSend() })
+    const { client } = build(server, {
+      whenReadyToSend: (ownerId) => g.gate.whenReadyToSend(ownerId),
+    })
 
     const outcome = await submitGrade({ ...deps(client), waitMs: 10 }, card('c1'), 3, at(1))
     expect(outcome).toEqual({ kind: 'queued' })
@@ -559,7 +570,9 @@ describe("porte d'envoi", () => {
     const server = createServer()
     const g = gated()
     await g.owner.set('bob')
-    const { client, reports } = build(server, { whenReadyToSend: () => g.gate.whenReadyToSend() })
+    const { client, reports } = build(server, {
+      whenReadyToSend: (ownerId) => g.gate.whenReadyToSend(ownerId),
+    })
     g.setStatus('signedIn')
 
     await expect(submitGrade(deps(client), card('c1'), 3, at(1))).rejects.toBeInstanceOf(
@@ -568,5 +581,217 @@ describe("porte d'envoi", () => {
     expect(g.purge).toHaveBeenCalledTimes(1)
     expect(server.calls).toHaveLength(0)
     expect(reports).toEqual([])
+  })
+})
+
+describe("note d'un autre compte", () => {
+  const me = (id: string) => ({ user: { id } })
+  const gate = (g: ReturnType<typeof gated>) => ({
+    whenReadyToSend: (ownerId?: string) => g.gate.whenReadyToSend(ownerId),
+  })
+
+  it("A se déconnecte avec une note en attente, B se connecte : la note de A n'est pas envoyée avec le jeton de B", async () => {
+    const server = createServer()
+    const g = gated()
+    await g.owner.set('alice')
+    g.setStatus('signedIn')
+    onlineManager.setOnline(false)
+    const first = build(server, gate(g))
+    first.client.setQueryData(ME_KEY, me('alice'))
+    await submitGrade(deps(first.client), card('c1'), 3, at(1))
+    // La note porte le compte du tap.
+    expect(first.client.getMutationCache().getAll()[0]?.state.variables).toMatchObject({
+      cardId: 'c1',
+      ownerId: 'alice',
+    })
+    const storage = memoryStorage()
+    await flushCache(first.client, storage)
+    kill(first.client)
+
+    // A se déconnecte, la purge est incomplète (propriétaire perdu) ; B se connecte.
+    g.setStatus('signedOut')
+    await g.owner.clear()
+    g.setUser('bob')
+    const second = build(server, gate(g))
+    await restoreInto(second.client, storage)
+    onlineManager.setOnline(true)
+    g.setStatus('signedIn')
+
+    await vi.waitFor(() =>
+      expect(second.client.getMutationCache().getAll()[0]?.state.error).toBeInstanceOf(
+        GradeAbortedError,
+      ),
+    )
+    expect(server.calls).toHaveLength(0)
+    expect(second.reports).toEqual([])
+  })
+
+  it('une note sans ownerId (ancienne mutation restaurée) garde le comportement actuel', async () => {
+    const server = createServer()
+    const g = gated()
+    g.setStatus('signedIn')
+    const { client } = build(server, gate(g))
+    // Pas de `['me']` en cache au tap : propriétaire inconnu, la note n'est pas contrôlée.
+    await expect(submitGrade(deps(client), card('c1'), 3, at(1))).resolves.toMatchObject({
+      kind: 'synced',
+    })
+    expect(server.applied).toHaveLength(1)
+  })
+
+  it('la note de B part avec le jeton de B', async () => {
+    const server = createServer()
+    const g = gated()
+    g.setUser('bob')
+    g.setStatus('signedIn')
+    const { client } = build(server, gate(g))
+    client.setQueryData(ME_KEY, me('bob'))
+    await submitGrade(deps(client), card('c1'), 3, at(1))
+    expect(server.applied).toHaveLength(1)
+  })
+})
+
+describe('note empoisonnée', () => {
+  it('une 5xx persistante est abandonnée après 10 réessais, comptée, et la file repart', async () => {
+    vi.useFakeTimers()
+    const server = createServer()
+    server.beforeReply = (variables) => {
+      if (variables.cardId === 'poison') throw new ApiError(500, 'INTERNAL_ERROR', 'Panne.')
+    }
+    onlineManager.setOnline(false)
+    const { client, reports } = build(server)
+    await submitGrade(deps(client), card('poison'), 3, at(1))
+    await submitGrade(deps(client), card('c2'), 3, at(2))
+
+    onlineManager.setOnline(true)
+    // 1 + 2 + 4 + 8 + 16 + 5 × 30 = 181 s de délais pour les 10 réessais.
+    await vi.advanceTimersByTimeAsync(181_000)
+
+    expect(server.calls.filter((v) => v.cardId === 'poison')).toHaveLength(11)
+    expect(server.applied.map((v) => v.cardId)).toEqual(['c2'])
+    expect(reports).toEqual([
+      {
+        message: '1 note synchronisée · 1 note abandonnée (refus ou panne du serveur)',
+        kind: 'error',
+      },
+    ])
+  })
+
+  it('une panne réseau, elle, est réessayée sans limite', async () => {
+    vi.useFakeTimers()
+    const server = createServer()
+    let failures = 25
+    server.beforeReply = () => {
+      if (failures-- > 0) throw new ApiError(0, 'NETWORK_ERROR', 'Hors ligne.')
+    }
+    const { client } = build(server)
+    void submitGrade({ ...deps(client), waitMs: 1 }, card('c1'), 3, at(1))
+    await vi.advanceTimersByTimeAsync(25 * 30_000)
+    expect(server.applied).toHaveLength(1)
+    expect(server.calls).toHaveLength(26)
+  })
+})
+
+describe('reconnexion', () => {
+  function fakeAuth(initial: AuthStatus) {
+    let status = initial
+    const listeners = new Set<(status: AuthStatus) => void>()
+    return {
+      get: () => status,
+      subscribe(listener: (status: AuthStatus) => void) {
+        listeners.add(listener)
+        return () => void listeners.delete(listener)
+      },
+      set(next: AuthStatus) {
+        status = next
+        for (const listener of [...listeners]) listener(next)
+      },
+    }
+  }
+
+  /** Requête active qui échoue en `SESSION_EXPIRED` tant que la session est fermée. */
+  function expiringQuery(client: QueryClient) {
+    const state = { open: false }
+    const queryFn = vi.fn(async () => {
+      if (!state.open) throw new ApiError(401, 'SESSION_EXPIRED', 'Session expirée.')
+      return 'ok'
+    })
+    const observer = new QueryObserver(client, {
+      queryKey: REVIEW_SUMMARY_KEY,
+      queryFn,
+      retry: false,
+    })
+    const unsubscribe = observer.subscribe(() => {})
+    return { state, queryFn, observer, unsubscribe }
+  }
+
+  it.each(['expired', 'signedOut', 'loading'] as const)(
+    'depuis %s : une requête tombée en SESSION_EXPIRED est relancée',
+    async (from) => {
+      const { client } = build(createServer())
+      const auth = fakeAuth(from)
+      const stop = watchReconnection(client, auth)
+      const query = expiringQuery(client)
+      await vi.waitFor(() => expect(query.observer.getCurrentResult().isError).toBe(true))
+
+      query.state.open = true
+      auth.set('signedIn')
+
+      await vi.waitFor(() => expect(query.observer.getCurrentResult().data).toBe('ok'))
+      stop()
+      query.unsubscribe()
+    },
+  )
+
+  it('ne relance que sur une vraie reconnexion (pas signedIn → signedIn)', async () => {
+    const { client } = build(createServer())
+    const auth = fakeAuth('signedIn')
+    const stop = watchReconnection(client, auth)
+    const query = expiringQuery(client)
+    await vi.waitFor(() => expect(query.observer.getCurrentResult().isError).toBe(true))
+    const calls = query.queryFn.mock.calls.length
+
+    auth.set('expired')
+    expect(query.queryFn.mock.calls.length).toBe(calls)
+    auth.set('signedIn')
+    await vi.waitFor(() => expect(query.queryFn.mock.calls.length).toBe(calls + 1))
+    // Deux `signedIn` de suite : pas de relance supplémentaire.
+    auth.set('signedIn')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(query.queryFn.mock.calls.length).toBe(calls + 1)
+    stop()
+    query.unsubscribe()
+  })
+
+  it('relance les notes restaurées et ne touche pas aux mutations', async () => {
+    // Note en vol à la mort de l'app : `pending`, pas en pause (le retour du réseau ne la relance pas).
+    const dead = createServer()
+    dead.swallowReply = true
+    const first = build(dead)
+    const storage = memoryStorage()
+    await submitGrade({ ...deps(first.client), waitMs: 20 }, card('c1'), 3, at(1))
+    await flushCache(first.client, storage)
+    kill(first.client)
+
+    // Restauration SANS reprise (aucun `onSuccess`) : la note reste `pending`, sans exécution.
+    const server = createServer()
+    const second = build(server)
+    await persistQueryClientRestore({
+      queryClient: second.client,
+      persister: createDirectPersister(storage),
+      buster: PERSIST_BUSTER,
+      maxAge: Number.POSITIVE_INFINITY,
+    })
+    const mutation = second.client.getMutationCache().getAll()[0]
+    expect(mutation?.state.status).toBe('pending')
+    const auth = fakeAuth('expired')
+    const stop = watchReconnection(second.client, auth)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(server.calls).toHaveLength(0)
+
+    auth.set('signedIn')
+
+    await vi.waitFor(() => expect(server.applied).toHaveLength(1))
+    expect(second.client.getMutationCache().getAll()[0]).toBe(mutation)
+    stop()
   })
 })

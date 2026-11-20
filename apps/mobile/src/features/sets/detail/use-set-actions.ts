@@ -20,19 +20,15 @@ export function useSetActions(set: SetDetail) {
     try {
       const copy = await duplicate.mutateAsync(set.id)
       toast.success('Set dupliqué dans votre bibliothèque.')
-      router.replace(routes.set(copy.id))
+      router.push(routes.set(copy.id))
     } catch (error) {
       toast.error(errorMessage(error))
     }
   }
 
   async function copyLink() {
-    let copied = false
-    try {
-      copied = await copyText(setWebUrl(config.webUrl, set.id))
-    } catch {
-      copied = false
-    }
+    // `copyText` ne rejette jamais : il renvoie `false` en cas d'échec.
+    const copied = await copyText(setWebUrl(config.webUrl, set.id))
     if (copied) toast.success('Lien copié dans le presse-papiers.')
     else toast.error('Impossible de copier le lien automatiquement.')
   }

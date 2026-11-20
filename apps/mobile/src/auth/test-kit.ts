@@ -12,6 +12,7 @@ export const ENDPOINTS: Endpoints = {
   tokenEndpoint: `${AUTH_URL}/api/oidc/token`,
   parEndpoint: `${AUTH_URL}/api/oidc/pushed-authorization-request`,
   revocationEndpoint: `${AUTH_URL}/api/oidc/revocation`,
+  requiresIssParameter: false,
 }
 
 export const DISCOVERY_DOCUMENT = {

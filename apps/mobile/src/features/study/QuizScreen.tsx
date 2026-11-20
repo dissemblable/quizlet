@@ -143,7 +143,11 @@ function QuizSession({
               </Text>
             </View>
 
-            <View style={styles.choices}>
+            <View
+              accessibilityRole="list"
+              accessibilityLabel="Réponses proposées"
+              style={styles.choices}
+            >
               {question.choices.map((choice, index) => (
                 // Les choix d'une question sont distincts : le texte sert de clé.
                 <ChoiceButton

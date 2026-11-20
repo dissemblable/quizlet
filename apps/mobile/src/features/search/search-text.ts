@@ -2,7 +2,8 @@ import { errorMessage, pluralize } from '@quizlet/shared'
 
 export const SEARCH_LABEL = "Titre, description, tag ou contenu d'une carte"
 export const SEARCH_PLACEHOLDER = `${SEARCH_LABEL}…`
-export const SEARCH_HINT = 'Accents pris en compte, casse ignorée.'
+export const SEARCH_HINT =
+  'Entrée ouvre le premier résultat. Accents pris en compte, casse ignorée. Un lien ou un identifiant de set est aussi accepté.'
 export const SEARCH_OFFLINE = 'Recherche indisponible hors ligne.'
 export const SEARCH_PENDING = 'Recherche…'
 

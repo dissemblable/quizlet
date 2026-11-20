@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { PermissionStatus } from 'expo'
 import * as Notifications from 'expo-notifications'
+import { routes } from '@/lib/routes'
 import type { ReminderPermission, ReminderPlan } from './plan-reminder'
 import {
   DEFAULT_REMINDER_PREFS,
@@ -92,7 +93,7 @@ export function applyPlan(plan: ReminderPlan): Promise<void> {
     await ensureChannel()
     await Notifications.scheduleNotificationAsync({
       identifier: REMINDER_ID,
-      content: { title: plan.title, body: plan.body, data: { route: '/review' } },
+      content: { title: plan.title, body: plan.body, data: { route: routes.review } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: plan.hour,

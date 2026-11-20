@@ -36,7 +36,7 @@ export function SetCard({ set, dimmed, onOpen, onMove }: SetCardProps) {
             </Text>
           ) : null}
           {set.tags.length > 0 ? (
-            <Text variant="caption" tone="muted" numberOfLines={2}>
+            <Text variant="caption" tone="muted">
               {set.tags.map((tag) => `#${tag.name}`).join(' ')}
             </Text>
           ) : null}

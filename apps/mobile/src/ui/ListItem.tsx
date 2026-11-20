@@ -28,8 +28,8 @@ export interface ListItemProps {
 }
 
 /**
- * CONTRAT : ligne de liste (compte, paramètres, « Déplacer vers… », fuseaux). Ajout de S0-3 (absent
- * du plan) : évite que chaque lot réécrive une ligne pressable avec sa propre accessibilité.
+ * CONTRAT : ligne de liste (compte, paramètres, « Déplacer vers… », fuseaux). Porte une fois pour
+ * toutes l'accessibilité d'une ligne pressable (rôle, état sélectionné, libellé).
  */
 export function ListItem({
   title,

@@ -3,14 +3,16 @@ import type { OwnerStore } from './owner-store'
 
 export interface PurgeDeps {
   client: QueryClient
-  /** Supprime le fichier (ou la clé AsyncStorage) du cache persisté. */
+  /** Supprime le fichier (ou la clé AsyncStorage) du cache persisté. REJETTE si l'un des deux échoue. */
   removeCache(): Promise<void>
   owner: Pick<OwnerStore, 'clear'>
 }
 
 /**
  * Efface TOUTES les données de l'utilisateur de l'appareil : cache, file de notes, cache persisté,
- * propriétaire. Ne rejette jamais.
+ * propriétaire. Ne rejette jamais. Le propriétaire n'est effacé que si le cache persisté l'a été :
+ * sans lui, un cache resté sur le disque passerait pour celui du prochain compte connecté (le
+ * propriétaire mémorisé permet de le reconnaître et de le purger).
  * - défaut (déconnexion) : `client.clear()` ;
  * - `refetch` (changement de propriétaire, écrans encore montés) : `resetQueries()`, qui garde les
  *   requêtes actives et les recharge, au lieu de laisser les écrans afficher l'ancien compte.
@@ -26,7 +28,12 @@ export async function purgeUserDataWith(
   } catch {
     // Rien à faire de plus : les fichiers sont tout de même supprimés.
   }
-  await Promise.allSettled([removeCache(), owner.clear()])
+  try {
+    await removeCache()
+  } catch {
+    return
+  }
+  await owner.clear().catch(() => {})
 }
 
 /**

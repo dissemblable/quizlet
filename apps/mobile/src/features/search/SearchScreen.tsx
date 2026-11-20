@@ -30,7 +30,8 @@ export function SearchScreen() {
   const [input, setInput] = useState('')
   const trimmed = input.trim()
   const reference = parseSetReference(trimmed)
-  const debounced = useDebouncedValue(trimmed)
+  // Un lien collé puis édité ne doit pas déclencher de requête sur l'ancienne URL.
+  const debounced = useDebouncedValue(reference === null ? trimmed : '')
   // Un lien n'est pas un texte à chercher ; un champ vidé ne doit pas garder ses anciens résultats.
   const search = reference !== null || trimmed === '' ? '' : debounced
   const results = useSearchSets(search)

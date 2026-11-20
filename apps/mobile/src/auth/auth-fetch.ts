@@ -4,14 +4,24 @@ import type { Session } from './session'
 import type { StatusStore } from './status'
 import { isAccessExpired } from './tokens'
 
+/** Lectures (GET, HEAD) : 20 s. */
 export const REQUEST_TIMEOUT_MS = OIDC_TIMEOUT_MS
+/** Écritures : un import de 1 Mo ou un gros set sur une liaison lente dépasse 20 s sans être en panne. */
+export const WRITE_TIMEOUT_MS = 60_000
 
 export interface AuthFetchDeps {
   session: Session
   status: StatusStore
   fetch: typeof fetch
   now: () => number
+  /** Impose un délai unique (tests) ; par défaut `requestTimeoutMs(méthode)`. */
   timeoutMs?: number
+}
+
+/** Délai d'une requête selon sa méthode : 20 s en lecture, 60 s pour toute écriture. */
+export function requestTimeoutMs(method: string): number {
+  const upper = method.toUpperCase()
+  return upper === 'GET' || upper === 'HEAD' ? REQUEST_TIMEOUT_MS : WRITE_TIMEOUT_MS
 }
 
 const sessionExpired = () => new ApiError(401, 'SESSION_EXPIRED', SESSION_EXPIRED_MESSAGE)
@@ -36,7 +46,6 @@ function isAuthFailure(response: Response): boolean {
  */
 export function createAuthFetch(deps: AuthFetchDeps): typeof fetch {
   const { session, status } = deps
-  const timeoutMs = deps.timeoutMs ?? REQUEST_TIMEOUT_MS
 
   async function send(
     input: Parameters<typeof fetch>[0],
@@ -46,6 +55,8 @@ export function createAuthFetch(deps: AuthFetchDeps): typeof fetch {
     const isRequest = typeof input === 'object' && 'clone' in input
     const headers = new Headers(init?.headers ?? (isRequest ? input.headers : undefined))
     headers.set('Authorization', `Bearer ${token}`)
+    const timeoutMs =
+      deps.timeoutMs ?? requestTimeoutMs(init?.method ?? (isRequest ? input.method : 'GET'))
 
     const controller = new AbortController()
     let timedOut = false

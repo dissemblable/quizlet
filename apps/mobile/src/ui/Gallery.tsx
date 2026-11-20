@@ -32,8 +32,8 @@ import { spacing } from './tokens'
 
 /**
  * Écran de démonstration de tous les composants (NON routé) pour valider l'apparence sur appareil,
- * en clair et en sombre. À brancher dans l'écran Diagnostics (`__DEV__`) :
- * `import { Gallery } from '@/ui/Gallery'`.
+ * en clair et en sombre. Utilisée par l'écran Diagnostics en `__DEV__`
+ * (`import { Gallery } from '@/ui/Gallery'`).
  */
 export function Gallery() {
   const { scheme, preference, setPreference } = useTheme()

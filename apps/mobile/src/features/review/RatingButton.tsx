@@ -12,7 +12,7 @@ interface RatingButtonProps {
   onPress: () => void
 }
 
-// Local : `Button` de `@/ui` n'a ni couleur par note ni second libellé (besoin signalé au lot C).
+// Propre à la révision : `Button` de `@/ui` n'a ni couleur par note ni second libellé (l'intervalle).
 export function RatingButton({ rating, interval, disabled, onPress }: RatingButtonProps) {
   const { colors } = useTheme()
   const tint = ratingColor(colors, rating)

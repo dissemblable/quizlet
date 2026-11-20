@@ -21,6 +21,18 @@ describe('parseDiscovery', () => {
     })
   })
 
+  it('`iss` exigé seulement si la découverte annonce le paramètre (RFC 9207), et seulement à `true`', () => {
+    const parse = (value: unknown) =>
+      parseDiscovery(
+        { ...DISCOVERY_DOCUMENT, authorization_response_iss_parameter_supported: value },
+        AUTH_URL,
+      )?.requiresIssParameter
+    expect(parse(true)).toBe(true)
+    expect(parse(false)).toBe(false)
+    expect(parse('true')).toBe(false)
+    expect(parseDiscovery(DISCOVERY_DOCUMENT, AUTH_URL)?.requiresIssParameter).toBe(false)
+  })
+
   it('refuse un issuer différent', () => {
     expect(
       parseDiscovery({ ...DISCOVERY_DOCUMENT, issuer: 'https://evil.example.com' }, AUTH_URL),

@@ -222,6 +222,32 @@ describe('callback invalide', () => {
     expect(h.memory.data.has(STORE_KEYS.pending)).toBe(false)
   })
 
+  describe('iss exigé (authorization_response_iss_parameter_supported)', () => {
+    const strict = async () => ({ ...ENDPOINTS, requiresIssParameter: true })
+
+    it('callback sans iss : erreur, aucun échange, connexion abandonnée', async () => {
+      const h = setup({ getEndpoints: strict, open: succeedWith() })
+      expect(await h.login.startLogin()).toEqual({ kind: 'error', message: MESSAGES.issuer })
+      expect(h.tokenCalls()).toHaveLength(0)
+      expect(h.status.get()).toBe('signedOut')
+      expect(h.memory.data.has(STORE_KEYS.pending)).toBe(false)
+    })
+
+    it('iss vide : même refus', async () => {
+      const h = setup({ getEndpoints: strict, open: succeedWith('&iss=') })
+      expect(await h.login.startLogin()).toEqual({ kind: 'error', message: MESSAGES.issuer })
+      expect(h.tokenCalls()).toHaveLength(0)
+    })
+
+    it('iss correct : connecté', async () => {
+      const h = setup({
+        getEndpoints: strict,
+        open: succeedWith(`&iss=${encodeURIComponent(ENDPOINTS.issuer)}`),
+      })
+      expect(await h.login.startLogin()).toEqual({ kind: 'signedIn' })
+    })
+  })
+
   it('code ou state manquant : erreur', async () => {
     const h = setup()
     expect(await h.login.completeLogin({ state: 's' })).toEqual({

@@ -73,6 +73,36 @@ describe('purgeUserDataWith', () => {
     expect(client.getQueryCache().getAll()).toHaveLength(0)
   })
 
+  it('garde le propriétaire si la suppression du cache persisté échoue', async () => {
+    const client = filled()
+    const { storage, data } = memoryStorage({ [OWNER_KEY]: 'alice' })
+    await purgeUserDataWith({
+      client,
+      removeCache: async () => {
+        throw new Error('disque')
+      },
+      owner: createOwnerStore(storage),
+    })
+    // Le cache en mémoire et la file de notes sont partis ; la clé reste pour reconnaître le fichier.
+    expect(client.getQueryCache().getAll()).toHaveLength(0)
+    expect(data.get(OWNER_KEY)).toBe('alice')
+  })
+
+  it("ne rejette pas non plus si l'effacement du propriétaire échoue", async () => {
+    const client = filled()
+    await expect(
+      purgeUserDataWith({
+        client,
+        removeCache: async () => {},
+        owner: {
+          clear: async () => {
+            throw new Error('disque')
+          },
+        },
+      }),
+    ).resolves.toBeUndefined()
+  })
+
   it('`refetch` : remet les requêtes à zéro au lieu de les retirer', async () => {
     const client = filled()
     const { storage } = memoryStorage()

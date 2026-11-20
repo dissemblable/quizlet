@@ -22,12 +22,17 @@ export const cacheStorage: KeyValueStorage = createFallbackStorage(
 /** Propriétaire du cache (`quizlet.offline.owner.v1`, AsyncStorage). */
 export const ownerStore = createOwnerStore(asyncStorage)
 
-/** Efface les deux emplacements possibles du cache : un repli passé ne doit pas laisser de fichier. */
+/**
+ * Efface les deux emplacements possibles du cache : un repli passé ne doit pas laisser de fichier.
+ * Rejette si l'un des deux échoue (après avoir tenté les deux) : `purgeUserDataWith` garde alors le
+ * propriétaire mémorisé.
+ */
 async function removeCache(): Promise<void> {
-  await Promise.allSettled([
+  const results = await Promise.allSettled([
     fileStorage.removeItem(PERSIST_KEY),
     asyncStorage.removeItem(PERSIST_KEY),
   ])
+  for (const result of results) if (result.status === 'rejected') throw result.reason
 }
 
 export function purgeStoredData(

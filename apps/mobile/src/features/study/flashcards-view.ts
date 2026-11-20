@@ -1,4 +1,5 @@
 import { type FlashcardMark, type FlashcardsProgress, pluralize } from '@quizlet/shared'
+import { flipAnnouncement } from '@/ui/logic'
 
 export function positionLabel(progress: FlashcardsProgress, finished: boolean): string {
   return finished ? 'Session terminée' : `Carte ${progress.position} sur ${progress.total}`
@@ -17,7 +18,7 @@ export function faceAnnouncement(
   card: { term: string; definition: string },
   flipped: boolean,
 ): string {
-  return flipped ? `Définition : ${card.definition}` : `Terme : ${card.term}`
+  return flipAnnouncement(flipped, card.term, card.definition)
 }
 
 export function recapSubtitle(total: number): string {

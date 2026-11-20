@@ -1,6 +1,6 @@
 import { ApiError, NETWORK_ERROR_MESSAGE, SESSION_EXPIRED_MESSAGE } from '@quizlet/shared'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAuthFetch } from './auth-fetch'
+import { createAuthFetch, requestTimeoutMs } from './auth-fetch'
 import { createSession } from './session'
 import { createStatusStore } from './status'
 import { createAuthStore, STORE_KEYS } from './store'
@@ -250,6 +250,44 @@ describe('erreurs réseau', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(await outcome).toMatchObject({ code: 'NETWORK_ERROR' })
     expect(h.status.get()).toBe('signedIn')
+  })
+
+  it('une écriture (POST) a 60 s, une lecture 20 s', async () => {
+    vi.useFakeTimers()
+    const h = setup()
+    const hanging = createAuthFetch({
+      session: h.session,
+      status: h.status,
+      fetch: (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+      now: () => NOW,
+    })
+    const settled = { post: false, get: false }
+    const post = hanging(API, { method: 'POST', body: '{}' }).catch((e: unknown) => e)
+    const get = hanging(API).catch((e: unknown) => e)
+    void post.then(() => {
+      settled.post = true
+    })
+    void get.then(() => {
+      settled.get = true
+    })
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(settled).toEqual({ post: false, get: true })
+    await vi.advanceTimersByTimeAsync(39_999)
+    expect(settled.post).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await post).toMatchObject({ code: 'NETWORK_ERROR' })
+  })
+
+  it('le délai suit la méthode (insensible à la casse)', () => {
+    expect([requestTimeoutMs('GET'), requestTimeoutMs('head')]).toEqual([20_000, 20_000])
+    expect(['POST', 'put', 'PATCH', 'DELETE'].map(requestTimeoutMs)).toEqual([
+      60_000, 60_000, 60_000, 60_000,
+    ])
   })
 
   it('annulation voulue par l’appelant : l’erreur d’origine, pas NETWORK_ERROR', async () => {

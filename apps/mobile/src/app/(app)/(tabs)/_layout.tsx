@@ -42,6 +42,8 @@ export default function TabsLayout() {
         options={{
           title: 'Révision',
           tabBarBadge: badge > 0 ? badge : undefined,
+          // Le badge n'est pas annoncé par TalkBack avec le libellé seul.
+          tabBarAccessibilityLabel: badge > 0 ? `Révision, ${badge} à réviser` : 'Révision',
           tabBarIcon: ({ color, size }) => <Icon name="layers" color={color} size={size} />,
         }}
       />

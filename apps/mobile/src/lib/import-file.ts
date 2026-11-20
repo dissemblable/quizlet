@@ -17,21 +17,19 @@ export type ImportFileResult = { ok: true; text: string } | { ok: false; error: 
 const TOO_LARGE = 'Fichier trop volumineux : 1 Mo au maximum.'
 const NOT_UTF8 =
   "Ce fichier n'est pas encodé en UTF-8. Enregistrez-le au format « CSV UTF-8 » puis réessayez."
-const BAD_EXTENSION = 'Choisissez un fichier .csv ou .txt.'
 const UNREADABLE = 'Impossible de lire ce fichier.'
 
 /**
- * Lit un fichier d'import avec les MÊMES messages que le web (`ImportPage.loadFile`), plus le
- * contrôle d'extension (le sélecteur Android n'est pas filtré : le filtre MIME masque des CSV) :
+ * Lit un fichier d'import avec les MÊMES messages que le web (`ImportPage.loadFile`). Pas de contrôle
+ * d'extension (le web n'en fait pas, et certains fournisseurs de fichiers n'en donnent aucune) : le
+ * décodage UTF-8 strict écarte les binaires.
  * - `size > IMPORT_MAX_BYTES` → refus sans lecture ;
- * - extension autre que `.csv` / `.txt` (insensible à la casse) → refus sans lecture ;
  * - octets non UTF-8 (`decodeUtf8Strict` → `null`) → refus ;
  * - lecture impossible (`bytes()` rejette) → refus.
  * Ne rejette jamais.
  */
 export async function readImportFile(file: ImportFile): Promise<ImportFileResult> {
   if (file.size > IMPORT_MAX_BYTES) return { ok: false, error: TOO_LARGE }
-  if (!/\.(?:csv|txt)$/i.test(file.name)) return { ok: false, error: BAD_EXTENSION }
   try {
     const bytes = await file.bytes()
     // `size` vaut 0 quand il est illisible : on re-vérifie sur les octets réellement lus.

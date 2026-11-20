@@ -16,8 +16,8 @@ describe('withDeviceTimeZone', () => {
     })
   })
 
-  it('retombe sur le fuseau par défaut quand l’appareil n’en donne pas', () => {
-    expect(withDeviceTimeZone(settings, null)?.timezone).toBe('Europe/Paris')
+  it('ne fait rien quand l’appareil ne donne pas de fuseau (comme le web)', () => {
+    expect(withDeviceTimeZone(settings, null)).toBeNull()
   })
 
   it('ne fait rien si un fuseau est déjà choisi', () => {

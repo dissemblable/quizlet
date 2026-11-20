@@ -153,7 +153,11 @@ export function createLogin(deps: LoginDeps): Login {
 
       const endpoints = await deps.getEndpoints()
       // RFC 9207 : l'émetteur de la réponse doit être celui de la découverte (attaque de confusion).
-      if (params.iss && stripTrailingSlashes(params.iss) !== endpoints.issuer) {
+      // Exigé quand la découverte annonce `authorization_response_iss_parameter_supported`.
+      const issuerRejected = params.iss
+        ? stripTrailingSlashes(params.iss) !== endpoints.issuer
+        : endpoints.requiresIssParameter
+      if (issuerRejected) {
         await store.clearPending()
         return { kind: 'error', message: MESSAGES.issuer }
       }

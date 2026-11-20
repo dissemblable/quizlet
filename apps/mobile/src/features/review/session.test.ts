@@ -4,9 +4,9 @@ import type { QueueCard } from '@/lib/queries'
 import {
   applyGradeOutcome,
   cardAnnouncement,
+  deriveSetQueue,
   gradeAnnouncement,
   intervalLabel,
-  pendingNotice,
   progressPercent,
   ratingAccessibilityLabel,
   recapAnnouncement,
@@ -115,11 +115,6 @@ describe('progression et libellés', () => {
     ])
   })
 
-  it('accorde les notes en attente de synchronisation', () => {
-    expect(pendingNotice(1)).toBe('1 note en attente de synchronisation')
-    expect(pendingNotice(3)).toBe('3 notes en attente de synchronisation')
-  })
-
   it('annonce la face visible, la note et le récapitulatif', () => {
     const card = queueCard('c1')
     expect(cardAnnouncement(card, false)).toBe('Terme : Terme c1')
@@ -205,5 +200,23 @@ describe('reviewTarget', () => {
       backLabel: 'Capitales',
       recapBackLabel: 'Retour au set',
     })
+  })
+})
+
+describe('deriveSetQueue', () => {
+  const other = { ...queueCard('c3'), setId: 's2' }
+
+  it('garde les cartes du set, dans l’ordre de l’instantané', () => {
+    const all = { cards: [queueCard('c1'), other, queueCard('c2')] }
+    expect(deriveSetQueue(all, 's1')?.map((card) => card.id)).toEqual(['c1', 'c2'])
+    expect(deriveSetQueue(all, 's2')?.map((card) => card.id)).toEqual(['c3'])
+  })
+
+  it('renvoie une file vide si le set n’a aucune carte du jour', () => {
+    expect(deriveSetQueue({ cards: [other] }, 's1')).toEqual([])
+  })
+
+  it('renvoie undefined sans instantané', () => {
+    expect(deriveSetQueue(undefined, 's1')).toBeUndefined()
   })
 })

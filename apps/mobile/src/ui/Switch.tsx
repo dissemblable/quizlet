@@ -22,8 +22,7 @@ export interface SwitchProps {
 }
 
 /**
- * CONTRAT : interrupteur (rôle `switch`) avec libellé, thémé. Ajout de S0-3 (absent du plan) pour
- * la bascule du rappel quotidien et les réglages.
+ * CONTRAT : interrupteur (rôle `switch`) avec libellé, thémé (rappel quotidien, réglages).
  */
 export function Switch({
   label,

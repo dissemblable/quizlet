@@ -27,7 +27,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 /**
  * Ouvre le sélecteur de fichiers (`File.pickFileAsync`, tous types : le filtre MIME masque des CSV).
- * `null` si l'utilisateur annule. Le contrôle `.csv` / `.txt` n'est pas fait ici.
+ * `null` si l'utilisateur annule. Aucun contrôle d'extension (le web n'en fait pas).
  */
 export async function pickTextFile(): Promise<ImportFile | null> {
   try {

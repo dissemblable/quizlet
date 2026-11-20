@@ -28,7 +28,21 @@ export function useOnlineGuard(): () => boolean {
   return guardOnline
 }
 
-/** CONTRAT : état hors ligne pour l'UI (bannière, boutons désactivés). */
+/**
+ * CONTRAT : état hors ligne pour l'UI (bannière, boutons désactivés).
+ *
+ * `restoring` (`useIsRestoring()` de TanStack) est FIABLE sous `AppQueryProvider` : vrai dès le
+ * premier rendu (état initial du fournisseur de persistance), faux seulement quand la restauration
+ * est finie, `onSuccess` ou `onError` compris (un cache absent, périmé ou d'un autre `buster` est un
+ * succès sans données). Il ne reste donc jamais vrai à cause de l'envoi des notes (`onSuccess` ne
+ * renvoie pas de promesse). Hors du fournisseur (tests de rendu isolés), il vaut `false`.
+ *
+ * Les écrans de notation désactivent la notation tant que `restoring` est vrai : une note créée
+ * avant la fin de la restauration passerait devant les notes restaurées dans la file (même `scope`)
+ * et le serveur ignore une note plus ancienne arrivée après une plus récente pour la même carte.
+ * Rien n'est écrit sur le disque avant la fin de la restauration (`flushPersistedCache` attend
+ * `isRestored()`, et le fournisseur ne s'abonne aux écritures qu'ensuite).
+ */
 export function useOfflineStatus(): OfflineStatus {
   const online = useIsOnline()
   const pendingGrades = useIsMutating({ mutationKey: GRADE_MUTATION_KEY })

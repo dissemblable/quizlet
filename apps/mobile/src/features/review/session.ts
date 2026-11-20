@@ -11,6 +11,7 @@ import type { QueueCard } from '@/lib/queries'
 import { type QueryView, queryView } from '@/lib/query-state'
 import { routes } from '@/lib/routes'
 import type { GradeOutcome } from '@/offline/types'
+import { flipAnnouncement } from '@/ui/logic'
 
 /**
  * Issue d'une note (`useGrade().grade`) → action du reducer partagé. Un seul chemin pour les deux
@@ -46,8 +47,23 @@ export function recapCounters(
   return RATINGS.map((rating) => ({ rating, label: RATING_LABELS[rating], count: ratings[rating] }))
 }
 
-export function pendingNotice(count: number): string {
-  return `${pluralize(count, 'note')} en attente de synchronisation`
+/** Ligne d'info quand la file d'un set est déduite de celle du jour (hors ligne, sans cache du set). */
+export const DERIVED_QUEUE_NOTICE =
+  'Hors ligne : cartes du jour déduites de la dernière synchronisation.'
+
+/** Aide des boutons de note pendant la restauration du cache persisté. */
+export const RESTORING_HELP = 'Restauration des données…'
+
+/**
+ * File d'un set déduite du dernier instantané « tous les sets » (hors ligne). `undefined` sans
+ * instantané. Approximation : les plafonds quotidiens ont été appliqués à l'ensemble des sets, la
+ * file d'un set peut donc être plus courte que celle que renverrait l'API.
+ */
+export function deriveSetQueue<T extends { setId: string }>(
+  all: { cards: T[] } | undefined,
+  setId: string,
+): T[] | undefined {
+  return all?.cards.filter((card) => card.setId === setId)
 }
 
 /**
@@ -74,7 +90,7 @@ export function cardAnnouncement(
   card: Pick<QueueCard, 'term' | 'definition'>,
   flipped: boolean,
 ): string {
-  return flipped ? `Définition : ${card.definition}` : `Terme : ${card.term}`
+  return flipAnnouncement(flipped, card.term, card.definition)
 }
 
 export function gradeAnnouncement(rating: Rating): string {

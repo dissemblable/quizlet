@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import type { AuthStatus } from '@/auth/types'
 import { GRADE_MUTATION_KEY } from './keys'
 
 const noop = () => {}
@@ -39,4 +40,32 @@ export function createRestoreHandlers(client: QueryClient): RestoreHandlers {
     },
     isRestored: () => restored,
   }
+}
+
+/** Reconnexion : passage à `signedIn` depuis `expired`, `signedOut` ou `loading`. */
+export function isReconnection(previous: AuthStatus, next: AuthStatus): boolean {
+  return next === 'signedIn' && previous !== 'signedIn'
+}
+
+export interface AuthStatusSource {
+  get(): AuthStatus
+  subscribe(listener: (status: AuthStatus) => void): () => void
+}
+
+/**
+ * À chaque reconnexion, relance ce que la session morte a laissé en échec : `invalidateQueries()`
+ * recharge les requêtes actives tombées en `SESSION_EXPIRED` (sinon un écran reste vide ou en
+ * erreur), puis les notes en attente reprennent. Les mutations ne sont pas touchées par
+ * l'invalidation ; la file de révision d'une séance est figée côté écran, le rechargement ne la
+ * change pas. Renvoie la fonction de désabonnement.
+ */
+export function watchReconnection(client: QueryClient, auth: AuthStatusSource): () => void {
+  let previous = auth.get()
+  return auth.subscribe((status) => {
+    if (isReconnection(previous, status)) {
+      void client.invalidateQueries()
+      resumePendingGrades(client)
+    }
+    previous = status
+  })
 }

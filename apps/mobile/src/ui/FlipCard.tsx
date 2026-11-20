@@ -1,4 +1,4 @@
-import { type ComponentProps, useEffect, useRef, useState } from 'react'
+import { type ComponentProps, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
   Animated,
@@ -49,17 +49,20 @@ function useReduceMotion(): boolean {
 /**
  * CONTRAT : carte retournable (flashcards, révision). Retournement avec `Animated` (rotation), ou
  * fondu si « réduire les animations » est actif (`AccessibilityInfo.isReduceMotionEnabled`). Rôle
- * `button` ; TalkBack lit la face visible, le changement de face est annoncé.
+ * `button` ; TalkBack lit la face visible.
  *
  * Les deux faces sont masquées à TalkBack : le libellé du bouton (« Terme : … » / « Définition : … »)
- * porte seul le contenu de la face visible, et sa région `polite` annonce chaque changement.
+ * porte seul le contenu de la face visible. Pas de région live ici : l'écran appelant annonce le
+ * changement de face ou de carte (`announce(flipAnnouncement(…))`), un seul canal pour TalkBack.
  */
 export function FlipCard({ term, definition, flipped, onFlip, style, testID }: FlipCardProps) {
   const reduceMotion = useReduceMotion()
-  const progress = useRef(new Animated.Value(flipped ? 1 : 0)).current
+  const [progress] = useState(() => new Animated.Value(flipped ? 1 : 0))
   const shown = useRef({ term, definition })
 
-  useEffect(() => {
+  // Layout effect : la bonne face est posée avant la peinture (pas de frame avec la définition de la
+  // carte suivante).
+  useLayoutEffect(() => {
     const target = flipped ? 1 : 0
     // Autre carte : on saute à la bonne face sans animer, sinon le retour vers le terme
     // laisserait entrevoir la définition de la carte suivante.
@@ -123,7 +126,6 @@ export function FlipCard({ term, definition, flipped, onFlip, style, testID }: F
       accessibilityRole="button"
       accessibilityLabel={flipAnnouncement(flipped, term, definition)}
       accessibilityHint="Appuyer pour retourner la carte"
-      accessibilityLiveRegion="polite"
       onPress={onFlip}
       testID={testID}
       style={[styles.root, style]}

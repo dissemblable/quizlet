@@ -2,8 +2,8 @@ import { Pressable, StyleSheet } from 'react-native'
 import { Icon, type IconName, radius, spacing, Text, useTheme } from '@/ui'
 
 /**
- * Bouton contouré teinté (« À revoir » en ton `warning`, « Je sais » en ton `success`).
- * CONTRAT : `Button` de `@/ui` n'a pas de prop de ton ; à remplacer par `Button tone` si elle existe.
+ * Bouton contouré teinté (« À revoir » en ton `warning`, « Je sais » en ton `success`), propre aux
+ * flashcards : `Button` de `@/ui` n'a pas de ton, ce bouton coloré reste donc local.
  */
 export function ToneButton({
   label,

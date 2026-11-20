@@ -22,7 +22,7 @@ export interface ChipProps {
 /** CONTRAT : puce de filtre pressable (dossiers, tags), cible tactile ≥ 44 dp. */
 export function Chip({
   label,
-  selected = false,
+  selected,
   onPress,
   icon,
   count,
@@ -32,8 +32,9 @@ export function Chip({
   testID,
 }: ChipProps) {
   const { colors } = useTheme()
-  const foreground = selected ? colors.primaryForeground : colors.secondaryForeground
-  const countColor = selected ? colors.primaryForeground : colors.mutedForeground
+  const active = selected === true
+  const foreground = active ? colors.primaryForeground : colors.secondaryForeground
+  const countColor = active ? colors.primaryForeground : colors.mutedForeground
 
   return (
     <Pressable
@@ -41,7 +42,8 @@ export function Chip({
       accessibilityLabel={
         accessibilityLabel ?? (count === undefined ? label : `${label}, ${count}`)
       }
-      accessibilityState={{ selected, disabled }}
+      // `selected` absent : pas d'état de sélection annoncé (puces d'étiquettes de l'éditeur).
+      accessibilityState={selected === undefined ? { disabled } : { selected, disabled }}
       disabled={disabled}
       onPress={onPress}
       // 36 dp visibles + 4 dp de marge tactile de chaque côté = 44 dp.
@@ -49,7 +51,7 @@ export function Chip({
       testID={testID}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: selected ? colors.primary : colors.secondary },
+        { backgroundColor: active ? colors.primary : colors.secondary },
         pressed && styles.pressed,
         disabled && styles.disabled,
         style,

@@ -4,7 +4,7 @@ import { getAuthStatus, subscribeAuthStatus } from '@/auth/status'
 import { onAppStateChange } from './network-adapter'
 import { flushPersistedCache, getRestoreHandlers, persistOptions } from './persistence'
 import { getQueryClient } from './query-client'
-import { resumePendingGrades } from './restore'
+import { watchReconnection } from './restore'
 
 /**
  * CONTRAT : fournit le `QueryClient` (`getQueryClient()`) avec persistance (stockage fichier),
@@ -18,14 +18,10 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
   const restore = getRestoreHandlers()
 
   useEffect(() => {
-    // Reconnexion après « session expirée » : les requêtes en échec et les notes repartent.
-    let previous = getAuthStatus()
-    const unsubscribeAuth = subscribeAuthStatus((status) => {
-      if (previous === 'expired' && status === 'signedIn') {
-        void client.invalidateQueries()
-        resumePendingGrades(client)
-      }
-      previous = status
+    // Reconnexion (depuis `expired`, `signedOut`, `loading`) : requêtes en échec et notes repartent.
+    const unsubscribeAuth = watchReconnection(client, {
+      get: getAuthStatus,
+      subscribe: subscribeAuthStatus,
     })
     // L'app peut être tuée en arrière-plan : le cache est écrit tout de suite, sans attendre le délai.
     const unsubscribeApp = onAppStateChange((state) => {

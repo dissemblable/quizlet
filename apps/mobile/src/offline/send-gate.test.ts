@@ -1,7 +1,8 @@
+import { ApiError } from '@quizlet/shared'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuthStatus } from '@/auth/types'
 import type { KeyValueStorage } from './file-storage'
-import { GradeAbortedError } from './grade-policy'
+import { GradeAbortedError, isRetryable, OwnerCheckError } from './grade-policy'
 import { createOwnerStore } from './owner-store'
 import { createSendGate } from './send-gate'
 
@@ -162,5 +163,64 @@ describe('createSendGate', () => {
     auth.set('signedIn')
     await gate.whenReadyToSend()
     expect(fetchUserId).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('createSendGate : compte de la note (ownerId)', () => {
+  it('laisse passer une note du compte connecté, ou sans ownerId (ancienne note)', async () => {
+    const { gate, purge } = setup()
+    await expect(gate.whenReadyToSend('alice')).resolves.toBeUndefined()
+    await expect(gate.whenReadyToSend()).resolves.toBeUndefined()
+    expect(purge).not.toHaveBeenCalled()
+  })
+
+  it('A se déconnecte avec une note en attente, B se connecte : la note de A est abandonnée', async () => {
+    // Propriétaire absent (purge incomplète, clé perdue) : B serait adopté sans le contrôle de la note.
+    let current = 'alice'
+    const { gate, auth, store, purge } = setup({ owner: null, userId: async () => current })
+    await gate.whenReadyToSend('alice')
+    auth.set('signedOut')
+    await store.clear()
+    current = 'bob'
+    auth.set('signedIn')
+
+    await expect(gate.whenReadyToSend('alice')).rejects.toBeInstanceOf(GradeAbortedError)
+    // Pas de purge : le cache est peut-être celui de B, et ses propres notes ne doivent pas partir avec.
+    expect(purge).not.toHaveBeenCalled()
+    // Une note de B, elle, part.
+    await expect(gate.whenReadyToSend('bob')).resolves.toBeUndefined()
+  })
+
+  it('contrôle aussi les notes suivantes de la même session (vérification déjà faite)', async () => {
+    const { gate, fetchUserId } = setup({ userId: 'bob', owner: 'bob' })
+    await gate.whenReadyToSend('bob')
+    await expect(gate.whenReadyToSend('alice')).rejects.toBeInstanceOf(GradeAbortedError)
+    expect(fetchUserId).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('createSendGate : erreur de /api/me', () => {
+  const failWith = (error: unknown) => setup({ userId: async () => Promise.reject(error) })
+
+  it('un 4xx (hors session) devient réessayable : ce n’est pas un refus de la note', async () => {
+    for (const status of [400, 403, 404]) {
+      const { gate } = failWith(new ApiError(status, 'NOT_FOUND', 'non'))
+      const error = await gate.whenReadyToSend('alice').catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(OwnerCheckError)
+      expect(isRetryable(error)).toBe(true)
+    }
+  })
+
+  it('les autres erreurs sont propagées telles quelles (réseau, 5xx, session)', async () => {
+    for (const original of [
+      new ApiError(0, 'NETWORK_ERROR', 'réseau'),
+      new ApiError(503, 'UNKNOWN', 'indisponible'),
+      new ApiError(401, 'SESSION_EXPIRED', 'expirée'),
+      new ApiError(429, 'UNKNOWN', 'trop vite'),
+      new Error('autre'),
+    ]) {
+      const { gate } = failWith(original)
+      await expect(gate.whenReadyToSend('alice')).rejects.toBe(original)
+    }
   })
 })

@@ -4,8 +4,8 @@ import {
   type GradeResponse,
   type GradeVariables,
   isDeferred,
-  isRetryable,
   retryDelay,
+  shouldRetryGrade,
 } from './grade-policy'
 import { GRADE_MUTATION_KEY, GRADE_SCOPE_ID, REVIEW_QUEUE_KEY, REVIEW_SUMMARY_KEY } from './keys'
 import { emptyTally, type SyncReport, syncReport } from './sync-report'
@@ -13,8 +13,8 @@ import { emptyTally, type SyncReport, syncReport } from './sync-report'
 export interface GradeMutationDeps {
   /** `POST /api/review/cards/:cardId` avec `{ rating, reviewedAt }`. */
   postGrade(variables: GradeVariables): Promise<GradeResponse>
-  /** Porte d'envoi (session, propriétaire) : voir `createSendGate`. */
-  whenReadyToSend(): Promise<void>
+  /** Porte d'envoi (session, propriétaire) : voir `createSendGate`. `ownerId` : celui de la note. */
+  whenReadyToSend(ownerId?: string): Promise<void>
   /** Toast de fin de synchronisation. */
   report(report: SyncReport): void
   now?(): number
@@ -50,11 +50,11 @@ export function installGradeMutation(client: QueryClient, deps: GradeMutationDep
 
   client.setMutationDefaults(GRADE_MUTATION_KEY, {
     mutationFn: async (variables: GradeVariables) => {
-      await deps.whenReadyToSend()
+      await deps.whenReadyToSend(variables.ownerId)
       return deps.postGrade(variables)
     },
     scope: { id: GRADE_SCOPE_ID },
-    retry: (_failureCount, error) => isRetryable(error),
+    retry: shouldRetryGrade,
     retryDelay: (failureCount) => retryDelay(failureCount),
     onSuccess: (data: GradeResponse, variables: GradeVariables) => {
       removeCardFromQueues(client, variables.cardId)

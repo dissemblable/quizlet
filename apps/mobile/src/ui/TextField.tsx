@@ -1,8 +1,9 @@
-import { type ComponentRef, type ReactNode, type Ref, useState } from 'react'
+import { type ReactNode, type Ref, useState } from 'react'
 import {
   type StyleProp,
   StyleSheet,
   TextInput,
+  type TextInputInstance,
   type TextInputProps,
   type TextStyle,
   View,
@@ -28,6 +29,8 @@ export interface TextFieldProps
   > {
   /** Libellé affiché au-dessus du champ ET lu par TalkBack. */
   label: string
+  /** Remplace `label` pour TalkBack (« Terme, carte 3 ») ; le libellé visible reste `label`. */
+  accessibilityLabel?: string
   /** Libellé lu par TalkBack mais non affiché (champs de recherche, réponse du mode écrit). */
   labelHidden?: boolean
   value: string
@@ -43,7 +46,7 @@ export interface TextFieldProps
   /** Compteur « 12 / 200 » sous le champ (nécessite `maxLength`). */
   showCounter?: boolean
   /** Ref du `TextInput` (focus programmatique). `onBlur` et `onFocus` sont ceux de `TextInputProps` (RHF `Controller`). */
-  inputRef?: Ref<TextInput>
+  inputRef?: Ref<TextInputInstance>
   /** Icône Feather à gauche (loupe de recherche). */
   icon?: IconName
   /** Élément à droite dans le champ (bouton « effacer »). */
@@ -84,6 +87,7 @@ export function TextField({
   onFocus,
   onBlur,
   editable = true,
+  accessibilityLabel,
   accessibilityHint,
   ...inputProps
 }: TextFieldProps) {
@@ -125,14 +129,13 @@ export function TextField({
         ) : null}
         <TextInput
           {...inputProps}
-          // Le type public `TextInput` (contrat) diffère de l'instance native attendue par `ref`.
-          ref={inputRef as Ref<ComponentRef<typeof TextInput>>}
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           multiline={multiline}
           maxLength={maxLength}
           editable={editable}
-          accessibilityLabel={label}
+          accessibilityLabel={accessibilityLabel ?? label}
           accessibilityHint={accessibilityHint ?? message}
           placeholderTextColor={colors.mutedForeground}
           selectionColor={colors.primary}

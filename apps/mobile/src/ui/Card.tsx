@@ -23,7 +23,11 @@ export interface CardProps {
   testID?: string
 }
 
-/** CONTRAT : surface `colors.card` bordée, arrondie ; pressable si `onPress`. Peut contenir des boutons. */
+/**
+ * CONTRAT : surface `colors.card` bordée, arrondie ; pressable si `onPress`. Une carte pressable
+ * n'imbrique pas de bouton (un seul élément focusable pour TalkBack) : le bouton va en frère, à côté.
+ * Sans `onPress`, elle peut contenir des boutons.
+ */
 export function Card({
   children,
   onPress,

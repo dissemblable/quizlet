@@ -1,16 +1,18 @@
 import { errorMessage } from '@quizlet/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { useIsFocused, useRouter } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { SetGate } from '@/features/common'
-import { type QueueCard, type SetDetail, useReviewQueue } from '@/lib/queries'
+import { type QueueCard, queryKeys, type SetDetail, useReviewQueue } from '@/lib/queries'
 import { routes } from '@/lib/routes'
 import { useIdParam } from '@/lib/use-id-param'
 import { useEffectiveCards, useOfflineStatus } from '@/offline'
 import { Button, EmptyState, ErrorState, LoadingState, spacing, toast } from '@/ui'
 import { ReviewSession } from './ReviewSession'
 import { ReviewShell } from './ReviewShell'
-import { reviewQueueView, reviewTarget } from './session'
+import { DERIVED_QUEUE_NOTICE, deriveSetQueue, reviewQueueView } from './session'
+import { useLeaveReview } from './use-leave-review'
 
 /**
  * Révision FSRS. Sans `id` (onglet `/review`) : tous les sets ; avec `id` (`/sets/[id]/review`) :
@@ -24,15 +26,25 @@ export function ReviewScreen() {
 
 function ReviewLoader({ set }: { set?: SetDetail }) {
   const router = useRouter()
-  const { online } = useOfflineStatus()
+  const leave = useLeaveReview(set)
+  const queryClient = useQueryClient()
+  const { online, restoring } = useOfflineStatus()
   const queue = useReviewQueue(set?.id)
+  // Hors ligne, sans file du set en cache : on la déduit de l'instantané « tous les sets ».
+  const snapshot =
+    set && queue.data === undefined && !online
+      ? queryClient.getQueryData<{ cards: QueueCard[] }>(queryKeys.reviewQueue())
+      : undefined
+  const derived = useMemo(() => set && deriveSetQueue(snapshot, set.id), [snapshot, set])
+  const cards = queue.data?.cards ?? derived
   // Retire les cartes dont la note est déjà en attente d'envoi.
-  const effective = useEffectiveCards(queue.data?.cards)
+  const effective = useEffectiveCards(cards)
+  // La file figée vient-elle de l'instantané ? (pour la ligne d'info)
+  const fromSnapshot = useRef(false)
   const [attempt, setAttempt] = useState(0)
   const [restarting, setRestarting] = useState(false)
   // File de la séance, copiée une fois prête : ni un rafraîchissement, ni une note ne la modifient.
   const frozen = useRef<QueueCard[] | null>(null)
-  const target = reviewTarget(set)
   const focused = useIsFocused()
   const blurred = useRef(false)
   const { refetch } = queue
@@ -53,13 +65,14 @@ function ReviewLoader({ set }: { set?: SetDetail }) {
   }, [focused, refetch])
 
   const view = reviewQueueView({
-    hasData: queue.data !== undefined,
+    hasData: cards !== undefined,
     isPending: queue.isPending,
     isError: queue.isError,
     fetchStatus: queue.fetchStatus,
   })
   if (frozen.current === null && view === 'ready' && effective !== undefined) {
     frozen.current = effective
+    fromSnapshot.current = queue.data === undefined
   }
 
   async function restart() {
@@ -78,6 +91,8 @@ function ReviewLoader({ set }: { set?: SetDetail }) {
     }
   }
 
+  const notice = fromSnapshot.current ? DERIVED_QUEUE_NOTICE : undefined
+
   if (frozen.current !== null) {
     if (frozen.current.length > 0) {
       return (
@@ -86,24 +101,22 @@ function ReviewLoader({ set }: { set?: SetDetail }) {
           cards={frozen.current}
           set={set}
           online={online}
+          restoring={restoring}
+          notice={notice}
           restarting={restarting}
           onRestart={() => void restart()}
         />
       )
     }
     return (
-      <ReviewShell set={set}>
+      <ReviewShell set={set} notice={notice}>
         <EmptyState
           icon="calendar"
           title="Rien à réviser pour le moment"
           description="Les cartes dues et les nouvelles cartes du jour (selon vos limites quotidiennes) ont toutes été vues. Revenez plus tard."
           action={
             <View style={styles.actions}>
-              <Button
-                variant="outline"
-                label="Retour"
-                onPress={() => router.dismissTo(target.route)}
-              />
+              <Button variant="outline" label="Retour" onPress={leave} />
               <Button
                 variant="ghost"
                 label="Modifier mes limites"

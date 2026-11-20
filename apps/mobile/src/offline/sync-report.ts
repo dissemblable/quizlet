@@ -6,7 +6,7 @@ export interface SyncTally {
   synced: number
   /** Reçues mais non appliquées (déjà connues, trop anciennes). */
   ignored: number
-  /** Refus définitifs (carte supprimée…) : la note est perdue. */
+  /** Refus définitifs (carte supprimée…) ou pannes serveur persistantes (réessais épuisés) : la note est perdue. */
   dropped: number
 }
 
@@ -33,7 +33,7 @@ export function syncReport(tally: SyncTally): SyncReport | null {
   }
   if (tally.dropped > 0) {
     parts.push(
-      `${pluralize(tally.dropped, 'note')} ${agree(tally.dropped, 'abandonnée')} (refus définitif du serveur)`,
+      `${pluralize(tally.dropped, 'note')} ${agree(tally.dropped, 'abandonnée')} (refus ou panne du serveur)`,
     )
   }
   if (parts.length === 0) return null

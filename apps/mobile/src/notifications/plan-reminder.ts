@@ -27,14 +27,31 @@ export type ReminderPlan =
 
 export const REMINDER_TITLE = 'Quizlet'
 export const REMINDER_GENERIC_BODY = "C'est l'heure de réviser vos cartes."
-/** Au-delà, le compteur est jugé trop vieux pour être cité (le contenu est figé à la programmation). */
+/**
+ * Au-delà, le compteur est jugé trop vieux pour être cité. Mesuré entre le dernier résumé et le
+ * PROCHAIN déclenchement (le texte est figé à la programmation : c'est ce que la personne lira).
+ */
 export const SUMMARY_MAX_AGE_MS = 12 * 60 * 60 * 1000
+
+/**
+ * Prochain déclenchement d'un rappel quotidien à `hour:minute` (heure locale) : aujourd'hui si
+ * l'instant n'est pas passé, sinon demain. Un instant égal à `now` compte comme passé.
+ */
+export function nextTrigger(now: Date, hour: number, minute: number): Date {
+  const next = new Date(now)
+  next.setHours(hour, minute, 0, 0)
+  if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1)
+  return next
+}
 
 /**
  * CONTRAT : décide quoi programmer (pur, testé). `cancel` si le rappel est désactivé, la permission
  * n'est pas `granted` ou `status !== 'signedIn'`. Sinon `schedule` à l'heure choisie ; le texte cite
- * le nombre de cartes (`due + new`) SEULEMENT si le résumé existe, date de moins de 12 h et que le
- * total est > 0 ; sinon texte générique. Titre : « Quizlet ».
+ * le nombre de cartes (`due + new`) SEULEMENT si le résumé existe, n'est pas daté du futur, que le
+ * PROCHAIN déclenchement a lieu moins de 12 h après sa date (un rappel dans 20 h citerait un
+ * compteur vieux de plus de 20 h) et que le total est > 0 ; sinon texte générique. Le déclencheur
+ * quotidien répète ce texte tel quel jusqu'à la prochaine reprogrammation (`useReminderSync`, à
+ * chaque nouveau résumé). Titre : « Quizlet ».
  */
 export function planReminder({
   prefs,
@@ -47,10 +64,13 @@ export function planReminder({
   if (!enabled || permission !== 'granted' || status !== 'signedIn') return { action: 'cancel' }
 
   // Un résumé daté du futur (horloge reculée) n'est pas fiable : texte générique.
-  const age = summary === null ? Number.POSITIVE_INFINITY : now.getTime() - summary.updatedAt
+  const usable = summary !== null && summary.updatedAt <= now.getTime()
+  const ageAtTrigger = usable
+    ? nextTrigger(now, hour, minute).getTime() - summary.updatedAt
+    : Number.POSITIVE_INFINITY
   const total = summary === null ? 0 : summary.due + summary.new
   const body =
-    age >= 0 && age < SUMMARY_MAX_AGE_MS && total > 0
+    ageAtTrigger < SUMMARY_MAX_AGE_MS && total > 0
       ? `${pluralize(total, 'carte')} à réviser aujourd'hui.`
       : REMINDER_GENERIC_BODY
 

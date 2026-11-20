@@ -1,4 +1,4 @@
-import { LIMITS, type LibraryFilters, pluralize } from '@quizlet/shared'
+import { errorMessage, LIMITS, type LibraryFilters, pluralize } from '@quizlet/shared'
 import { useRouter } from 'expo-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native'
@@ -76,7 +76,15 @@ export function LibraryScreen() {
     }
     setRefreshing(true)
     try {
-      await Promise.all([query.refetch(), folders.refetch(), tags.refetch(), summary.refetch()])
+      const results = await Promise.all([
+        query.refetch(),
+        folders.refetch(),
+        tags.refetch(),
+        summary.refetch(),
+      ])
+      // refetch ne rejette pas : une requête en échec se lit sur son résultat.
+      const failed = results.find((result) => result.isError)
+      if (failed) toast.error(errorMessage(failed.error))
     } finally {
       setRefreshing(false)
     }
@@ -147,8 +155,9 @@ export function LibraryScreen() {
     </View>
   )
 
+  // Pas de pager sous une liste vide (page hors bornes, filtres sans résultat).
   const footer =
-    pages > 1 ? (
+    data && data.sets.length > 0 && pages > 1 ? (
       <View style={styles.pager}>
         <Button
           label="Précédente"

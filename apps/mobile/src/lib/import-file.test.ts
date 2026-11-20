@@ -19,20 +19,16 @@ describe('readImportFile', () => {
     expect(await readImportFile(file('excel.csv', bytes))).toEqual({ ok: true, text: 'a;b' })
   })
 
-  it('accepte .txt et ignore la casse de l’extension', async () => {
-    for (const name of ['mots.txt', 'MOTS.CSV', 'Mots.Txt', 'a.b.csv', '.csv']) {
-      expect((await readImportFile(file(name, encode('x ; y')))).ok).toBe(true)
+  it('accepte une extension quelconque, ou aucune (comme le web)', async () => {
+    for (const name of ['mots.txt', 'MOTS.CSV', 'mots.tsv', 'mots', 'document.pdf', '']) {
+      expect(await readImportFile(file(name, encode('x ; y')))).toEqual({ ok: true, text: 'x ; y' })
     }
   })
 
-  it('refuse une autre extension, sans lire le fichier', async () => {
-    for (const name of ['mots.pdf', 'mots.csv.exe', 'mots', 'mots.csvx', 'csv', '']) {
-      const entry = file(name, encode('x ; y'))
-      expect(await readImportFile(entry)).toEqual({
-        ok: false,
-        error: 'Choisissez un fichier .csv ou .txt.',
-      })
-      expect(entry.bytes).not.toHaveBeenCalled()
+  it('refuse un binaire non UTF-8, quelle que soit l’extension', async () => {
+    const binary = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0xff, 0xfe, 0x00, 0x80])
+    for (const name of ['mots.csv', 'mots.pdf', 'mots']) {
+      expect(await readImportFile(file(name, binary))).toMatchObject({ ok: false })
     }
   })
 

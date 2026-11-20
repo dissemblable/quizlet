@@ -110,8 +110,10 @@ export function ImportForm({ set }: { set?: SetDetail }) {
   }
 
   function cancel() {
-    if (router.canGoBack()) router.back()
-    else router.replace(set ? routes.set(set.id) : routes.newSet)
+    // Nouveau set : retour à `/sets/new` comme sur le web ; set existant : à son écran.
+    if (!set) router.replace(routes.newSet)
+    else if (router.canGoBack()) router.back()
+    else router.replace(routes.set(set.id))
   }
 
   return (

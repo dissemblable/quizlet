@@ -10,7 +10,7 @@ export interface AddTagResult {
 }
 
 /** Doublon sans tenir compte de la casse (l'API est unique sur `lower(nom)`). */
-export function hasTag(tags: readonly string[], name: string): boolean {
+function hasTag(tags: readonly string[], name: string): boolean {
   const key = name.toLowerCase()
   return tags.some((tag) => tag.toLowerCase() === key)
 }

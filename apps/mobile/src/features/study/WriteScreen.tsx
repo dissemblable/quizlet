@@ -11,7 +11,7 @@ import {
 } from '@quizlet/shared'
 import { Stack } from 'expo-router'
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { Keyboard, StyleSheet, type TextInput, type TextInputInstance, View } from 'react-native'
+import { Keyboard, StyleSheet, type TextInputInstance, View } from 'react-native'
 import { SetGate } from '@/features/common'
 import { type SetDetail, useDueCardIds } from '@/lib/queries'
 import { useIdParam } from '@/lib/use-id-param'
@@ -41,11 +41,6 @@ import {
   writeMistakeRows,
   writeStatement,
 } from './write-text'
-
-// CONTRAT : `TextField.inputRef` est typé `Ref<TextInput>` ; sous RN 0.88 ce type (`TextInputType`)
-// n'a pas `focus`, que porte l'instance réelle (`TextInputInstance`). À corriger dans `ui/TextField`.
-const focusInput = (field: TextInput | null) =>
-  (field as unknown as TextInputInstance | null)?.focus()
 
 /** Mode écrit d'un set : aucune écriture serveur, sans effet sur la planification FSRS. */
 export function WriteScreen() {
@@ -196,7 +191,7 @@ function WriteSession({
 }) {
   const [state, dispatch] = useReducer(writeReducer, questions, initWrite)
   const [given, setGiven] = useState('')
-  const input = useRef<TextInput>(null)
+  const input = useRef<TextInputInstance>(null)
   const question = state.questions[state.index]
   const current = state.current
   const answered = current !== null
@@ -205,7 +200,7 @@ function WriteSession({
   // Saisie prête à chaque question (le clavier s'ouvre) ; fin de séance : clavier refermé.
   useEffect(() => {
     if (state.finished) Keyboard.dismiss()
-    else if (!answered) focusInput(input.current)
+    else if (!answered) input.current?.focus()
   }, [answered, state.finished])
 
   useAnnounce(
@@ -269,6 +264,7 @@ function WriteSession({
                 if (!answered) setGiven(text)
               }}
               inputRef={input}
+              accessibilityHint={question.prompt}
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
