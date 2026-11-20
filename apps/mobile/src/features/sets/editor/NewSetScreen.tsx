@@ -1,4 +1,6 @@
-/** CONTRAT : création d'un set (`/sets/new`), sans props. Parité avec `NewSetPage`. */
+import { SetEditor } from './SetEditor'
+
+/** Création d'un set (`/sets/new`). */
 export function NewSetScreen() {
-  return null
+  return <SetEditor />
 }
