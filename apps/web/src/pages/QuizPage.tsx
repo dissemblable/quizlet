@@ -1,3 +1,14 @@
+import {
+  ApiError,
+  currentQuestion,
+  initQuiz,
+  mistakesOf,
+  type QuizQuestion,
+  type QuizState,
+  quizReducer,
+  quizScoreOf,
+  verdict,
+} from '@quizlet/shared'
 import { ChevronLeftIcon, LayersIcon, ListChecksIcon, RotateCcwIcon } from 'lucide-react'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
@@ -6,18 +17,7 @@ import { ChoiceButton, type ChoiceStatus } from '@/components/study/ChoiceButton
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { pageTitle } from '@/config'
-import { ApiError } from '@/lib/http'
 import { type SetDetail, useQuiz, useSet } from '@/lib/queries'
-import {
-  currentQuestion,
-  initQuiz,
-  mistakesOf,
-  type QuizQuestion,
-  type QuizState,
-  quizReducer,
-  scoreOf,
-  verdict,
-} from '@/lib/quiz'
 import { useShortcuts } from '@/lib/use-shortcuts'
 import { SetQueryStates } from '@/pages/SetPage'
 
@@ -85,7 +85,7 @@ function QuizSession({
   const question = currentQuestion(state)
   const answer = state.answers[state.index]
   const answered = answer !== undefined
-  const score = scoreOf(state)
+  const score = quizScoreOf(state)
 
   // Après une réponse, le focus va sur « Question suivante » : Entrée enchaîne.
   useEffect(() => {
@@ -205,7 +205,7 @@ function QuizResult({
   onRestart: () => void
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
-  const { correct, total, percent } = scoreOf(state)
+  const { correct, total, percent } = quizScoreOf(state)
   const mistakes = mistakesOf(state)
 
   useEffect(() => {

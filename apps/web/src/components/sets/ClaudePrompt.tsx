@@ -1,7 +1,7 @@
+import { CLAUDE_PROMPT } from '@quizlet/shared'
 import { CopyIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { CLAUDE_PROMPT } from '@/lib/prompt'
 
 /** Prompt à copier dans Claude : sa réponse se colle ensuite dans le champ d'import. */
 export function ClaudePrompt() {

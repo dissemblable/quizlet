@@ -1,3 +1,4 @@
+import { errorMessage } from '@quizlet/shared'
 import { Loader2Icon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -13,7 +14,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { errorMessage } from '@/lib/http'
 import { type FolderSummary, useDeleteFolder } from '@/lib/queries'
 
 export function DeleteFolderDialog({

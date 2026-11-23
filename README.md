@@ -71,20 +71,28 @@ apps/
     src/app.ts              assemblage des middlewares et routes, export du type AppType
     src/env.ts              configuration validée par Zod (refus de démarrer si invalide)
     src/middleware/         identité SSO, proxys de confiance, garde CSRF
-    src/routes/             /api/me, /sets (CRUD, import, quiz…), /folders, /tags, /review, /settings
+    src/routes/             /api/me, /sets (CRUD, import, quiz…), /folders, /tags, /review, /settings,
+                            /mobile (relais OAuth de l'app Android, routes/mobile.ts)
     src/services/           accès aux données et contrôles de propriété
-    src/domain/             logique pure : permissions, génération du quiz, planification FSRS
+    src/domain/             logique pure : permissions, génération du quiz, planification FSRS,
+                            heure des notes (grading.ts)
     src/db/                 schéma Drizzle, client, migrations, seed
     Dockerfile
   web/                      Front Vite + React 19 + React Router + TanStack Query
     src/pages/              bibliothèque, set, éditeur, import, flashcards, quiz, mode écrit,
                             révision, paramètres
     src/components/         mise en page, composants métier, ui/ (shadcn/ui)
-    src/lib/                client API, requêtes, logique pure (sessions, formulaires, mode
-                            écrit, séance de révision), thème
+    src/lib/                client API, requêtes, thème (la logique pure est dans packages/shared)
     nginx.conf, Dockerfile  image statique de production
+  mobile/                   App Android (Expo SDK 58, React Native), mêmes fonctionnalités que le
+                            web, plus hors-ligne et rappel quotidien : voir « App mobile » et
+                            docs/app-mobile.md (conception et décisions)
+    src/app/                routes Expo Router (4 onglets : Bibliothèque, Révision, Recherche, Compte)
+    src/{ui,auth,offline,notifications,lib,features}/   composants, OIDC, cache hors ligne, rappels
 packages/
   shared/                   schémas Zod, limites, messages, utilitaires (mélange, quiz, import CSV)
+                            et logique pure commune au web et au mobile (reducers flashcards, quiz,
+                            révision et mode écrit, formulaire de set, formats, erreurs client)
 docker/                     initialisation du Postgres de dev, script de sauvegarde (backup/)
 docker-compose.yml          Postgres de dev, et outil de sauvegarde local (profil tools)
 docker-compose.prod.yml     production derrière Authelia, sauvegardes comprises
@@ -94,6 +102,28 @@ docker-compose.prod.yml     production derrière Authelia, sauvegardes comprises
 - **TypeScript strict** partout. La config de base est `tsconfig.base.json`.
 - Le front appelle l'API avec le client RPC de Hono (`hc<AppType>`). Le type `AppType` est importé
   directement depuis `@quizlet/api`, sans aucune duplication de types.
+
+## App mobile (Android)
+
+`apps/mobile` est une app Expo (SDK 58, Hermes) réservée à Android. Elle offre les mêmes
+fonctionnalités que le web (bibliothèque, dossiers et tags, éditeur, import, flashcards, quiz, mode
+écrit, révision FSRS, paramètres) et ajoute la **révision hors ligne** (les notes données sans réseau
+sont rejouées dans l'ordre à la reconnexion) et un **rappel quotidien** local. L'authentification
+passe par Authelia (voir « Authentification mobile »).
+
+```bash
+cd apps/mobile
+cp .env.example .env            # puis renseigner l'URL de l'app, celle d'Authelia et le client OIDC
+pnpm test                       # logique pure (Vitest) ; pnpm typecheck && pnpm lint à la racine
+npx expo prebuild --platform android && npx expo run:android   # dev-client sur un téléphone en USB
+pnpm start                      # Metro pour le dev-client
+cd android && ./gradlew assembleRelease                        # APK installable
+```
+
+Prérequis du build natif : JDK 17, Android SDK (licences acceptées), `ANDROID_HOME`, et sous Windows
+les chemins longs activés (`LongPathsEnabled`). Le dossier `android/` est généré et ignoré par git.
+L'app n'est pas utilisable avec Expo Go (schéma `quizlet://` et modules natifs). Le relais OAuth
+`POST /api/mobile/callback` doit être déployé côté API avant la première connexion.
 
 ## Scripts (à la racine)
 
@@ -165,7 +195,8 @@ Toutes les routes sont sous `/api`, en JSON. Les erreurs ont la forme
 | `GET /review/summary` | Compteurs du jour : `{ due, new }` (cartes dues et nouvelles cartes, limites appliquées) |
 | `GET /review/queue?setId=` | File de révision du jour, avec l'échéance prévue pour chaque note. `setId` : un set visible (404 sinon) |
 | `GET /review/due?setId=` | Cartes d'un set visible déjà commencées et dues aujourd'hui (option « à revoir » du mode écrit) |
-| `POST /review/cards/:cardId` | Note une carte d'un set visible (404 sinon) : `{ rating: 1..4 }` → nouvel état, `requeue` |
+| `POST /review/cards/:cardId` | Note une carte d'un set visible (404 sinon) : `{ rating: 1..4, reviewedAt? }` → `{ state, due, requeue, card, ignored }`. `reviewedAt` (ISO 8601 en UTC avec le « Z », facultatif) date la note : l'app mobile l'envoie pour ses notes prises hors ligne. Il est borné (5 minutes dans le futur, 30 jours dans le passé) et `ignored: true` signale une note non appliquée (périmée, rejouée ou plus ancienne que la dernière révision), sans rien écrire : voir [Répétition espacée](#répétition-espacée-fsrs). Le web n'envoie pas `reviewedAt` et n'a jamais de note ignorée |
+| `POST /mobile/callback` | Relais du `form_post` d'Authelia vers l'app mobile : lit `code`, `state`, `iss`, `error` et `error_description` (formulaire) et répond par un **302** vers `quizlet://callback?…`. Après `identity`, avec une exception CSRF limitée à ce chemin : voir [Authentification mobile](#authentification-mobile-bearer-via-authelia) |
 | `GET /settings`, `PUT /settings` | Mes paramètres de révision (fuseau, limites quotidiennes, rétention cible) |
 | `GET /folders`, `POST /folders` | Mes dossiers (avec leur nombre de sets) ; création |
 | `PATCH /folders/:id`, `DELETE /folders/:id` | Propriétaire seul (404 sinon) : renommage, suppression |
@@ -218,6 +249,30 @@ La planification utilise la bibliothèque [`ts-fsrs`](https://github.com/open-sp
   **Réviser ce set** : la même file, limitée à un set visible, nouvelles cartes comprises.
 - **Séance** : une carte notée qui reste due aujourd'hui (étape d'apprentissage) revient en fin de
   séance. Les échéances prévues sous chaque bouton sont calculées par l'API à l'ouverture.
+- **Notes datées (`reviewedAt`)** : l'app mobile note hors ligne puis envoie ses notes plus tard, avec
+  leur heure (`reviewedAt`, ISO 8601 en UTC, avec le « Z »). Le champ est facultatif : sans lui (le
+  web), la note a l'heure du serveur et aucune des règles ci-dessous ne s'applique.
+  - La note est appliquée **à cette heure** : échéance, dernière révision et historique
+    (`review_logs.reviewed_at`) en partent. Le quota du jour se compte sur l'heure de la note : une
+    note d'hier ne consomme pas celui d'aujourd'hui.
+  - **Futur** : jusqu'à 5 minutes après l'heure du serveur, l'heure est gardée telle quelle (un
+    rejeu doit recevoir la même heure pour être reconnu). Au-delà (téléphone très en avance), la
+    note est appliquée à l'heure du serveur : mieux vaut l'appliquer que la perdre.
+  - **Trop ancienne** (plus de 30 jours) : ignorée. La réponse porte `ignored: true`, l'état courant
+    de la carte (`new`, due maintenant, si elle n'a jamais été notée), `requeue: false` et
+    `card: null` ; rien n'est écrit, aucune progression n'est créée.
+  - **Ordre et rejeu** : une note qui n'est pas strictement postérieure à la dernière révision de la
+    carte est ignorée de la même façon. Les notes prises hors ligne s'appliquent donc dans l'ordre de
+    leurs dates (la plus ancienne reçue en retard est ignorée), et le rejeu d'une note dont la
+    réponse s'est perdue ne l'applique jamais deux fois. Une note du web, sans `reviewedAt`, n'est
+    jamais ignorée ; elle est datée au plus tôt de la dernière révision de la carte (`ts-fsrs`
+    refuse un temps écoulé négatif), ce qui ne change rien tant qu'aucune note n'est datée dans le
+    futur.
+  - **Cas rare** : si l'horloge du téléphone avance de plus de 5 minutes, la note est appliquée à
+    l'heure du serveur. Un rejeu après une réponse perdue reçoit alors une autre heure et peut être
+    appliqué deux fois ; une note à plus de 5 minutes d'avance est aussi ignorée quand la carte a déjà
+    reçu une note datée plus tard (par exemple à 4 minutes d'avance). Le coût est une révision de
+    trop ou de moins sur une carte, jamais une note perdue en bloc.
 - Modifier le texte d'une carte conserve sa progression ; la supprimer supprime sa progression et
   son historique ; un set dupliqué repart de zéro. Les flashcards de la V1 n'enregistrent rien.
 
@@ -265,7 +320,7 @@ Elles sont validées par Zod au démarrage. Une variable vide (`FOO=`) est consi
 | `MIGRATIONS_DIR` | `./drizzle` | Dossier des migrations SQL |
 | `TRUSTED_PROXIES` | requis en prod (`127.0.0.1,::1` sinon) | IP, CIDR ou noms d'hôte autorisés à transmettre `Remote-*` |
 | `APP_ORIGIN` | requis en prod (`http://localhost:5180` sinon) | Origine publique de l'app, pour le contrôle CSRF |
-| `AUTH_LOGOUT_URL` | requis en prod | URL de déconnexion d'Authelia |
+| `AUTH_LOGOUT_URL` | requis en prod | URL de déconnexion d'Authelia. Son origine (celle du portail) est aussi la seule acceptée par la garde CSRF, sur `/api/mobile/callback` uniquement |
 | `CORS_ORIGINS` | vide | Origines autorisées en CORS (aucune par défaut) |
 | `DEV_AUTH_USER` | – | Active l'identité factice de dev. **Interdit en production** |
 | `DEV_AUTH_NAME`, `DEV_AUTH_EMAIL`, `DEV_AUTH_GROUPS` | – | Détails de l'identité factice |
@@ -304,12 +359,60 @@ Navigateur → Cloudflare → cloudflared → nginx ──auth_request──▶ 
 - Le cookie Authelia (SameSite=Lax) est posé sur le domaine parent, donc il accompagne aussi les
   requêtes venues d'un autre sous-domaine. L'API refuse toute méthode non sûre qui ne vient pas de
   sa propre origine (`Sec-Fetch-Site`, avec repli sur `Origin` = `APP_ORIGIN`). Le CORS est
-  désactivé par défaut.
+  désactivé par défaut. Une seule exception, limitée à un chemin : le relais de l'app mobile (voir
+  [Authentification mobile](#authentification-mobile-bearer-via-authelia)).
 - Quand la session Authelia expire, nginx répond aux appels d'API par un 302 vers le portail. Le
   front ne suit pas cette redirection : il affiche « Session expirée » avec un bouton
   « Se reconnecter », qui recharge la page et relance le parcours de connexion.
 - Le bouton « Se déconnecter » du menu utilisateur redirige vers `AUTH_LOGOUT_URL`, fournie par
   `GET /api/me` : la changer ne demande pas de rebuild.
+
+### Authentification mobile (Bearer via Authelia)
+
+L'app Android (`apps/mobile` ; conception, décisions et checklist appareil dans
+[`docs/app-mobile.md`](docs/app-mobile.md)) se connecte par OIDC auprès d'Authelia, dans le
+navigateur système (Custom Tab) : le mot de passe et le TOTP se saisissent sur le portail habituel,
+jamais dans l'app. Elle envoie ensuite `Authorization: Bearer <jeton d'accès>` : nginx le fait
+vérifier par Authelia (`auth_request`), comme un cookie de session.
+
+```
+App ─Bearer─▶ Cloudflare → nginx ──auth_request──▶ Authelia (valide le jeton)
+                             │ 200 : Remote-User / Remote-Name / Remote-Email
+                             ▼
+                           API (inchangée)
+```
+
+- **L'API ne change pas côté identité** : elle lit toujours `Remote-*`, posés par le proxy de
+  confiance (pair TCP vérifié). Elle ne voit jamais le jeton et n'en valide aucun.
+- **Jetons** : jeton d'accès d'environ 1 h, refresh token d'un mois (glissant : un usage régulier ne
+  reconnecte jamais), rangés dans le Keystore Android. Le jeton est limité à l'API de quizlet
+  (`audience` et `resource`) : il n'ouvre ni les autres applications du stack, ni `/` de quizlet.
+- **Relais `POST /api/mobile/callback`** : avec le scope `authelia.bearer.authz`, Authelia impose
+  `response_mode=form_post` (le code OAuth arrive par un POST HTML) et n'accepte que `http(s)` en
+  `redirect_uri`. Une redirection directe vers `quizlet://` est donc impossible : cette route reçoit
+  le POST et répond par un **302 vers `quizlet://callback?…`**.
+  - Elle passe après `identity` : le cookie Authelia vient d'être posé dans le Custom Tab, donc
+    `auth_request` laisse passer la requête (sans identité : 401).
+  - Elle ne lit que `code`, `state`, `iss`, `error` et `error_description` (2048 caractères au plus
+    chacun) ; tout le reste est ignoré. Les valeurs sont encodées avec `encodeURIComponent`
+    (l'espace devient `%20`, jamais `+`), dans un ordre fixe.
+  - Une entrée invalide (ni `code` et `state`, ni `error`, corps illisible) donne un 302 vers
+    `quizlet://callback?error=invalid_request`, jamais une erreur JSON : la personne resterait
+    bloquée dans le Custom Tab.
+  - Aucun effet de bord, aucune base de données. Le code ne sert à rien sans le `code_verifier` PKCE
+    de l'app, qui rejette en plus un `state` inattendu.
+- **Exception CSRF, limitée à ce chemin** : le POST vient du portail (même site, autre origine) et
+  `csrfGuard` le refuserait. Il accepte l'`Origin` du portail (celle de `AUTH_LOGOUT_URL`) sur
+  `/api/mobile/callback` seulement, chemin exact : partout ailleurs cette origine reste refusée.
+  Elle n'est jamais ajoutée à `APP_ORIGIN` ni à `CORS_ORIGINS`. Sans `AUTH_LOGOUT_URL` (dev), il n'y
+  a aucune exception.
+- **nginx** : aucun nouveau `location` : celui de `/api/` couvre déjà le relais. Vérifier que le
+  snippet `proxy.conf` du stack ne réécrit pas l'en-tête `Location` des réponses
+  (`proxy_redirect`) : le 302 doit arriver tel quel dans le Custom Tab.
+- **Déconnexion** : l'app révoque son refresh token chez Authelia, puis efface ses jetons. La
+  session Authelia du **navigateur survit** : la fermer couperait aussi les autres applications du
+  stack. Se reconnecter dans l'app peut donc se faire sans ressaisir le mot de passe, tant que cette
+  session reste ouverte.
 
 ### Mode de développement
 
@@ -408,6 +511,8 @@ docker exec nginx nginx -t && docker exec nginx nginx -s reload
 - L'API se fie au pair TCP (le conteneur `nginx`, cf. `TRUSTED_PROXIES=nginx`) et ignore
   `X-Forwarded-For` : le `$proxy_add_x_forwarded_for` de `proxy.conf` ne pose pas de problème.
 - La limite de taille de nginx par défaut (`client_max_body_size 1m`) correspond à celle de l'API.
+- Le relais de l'app mobile (`POST /api/mobile/callback`) passe par le `location /api/` ci-dessus :
+  rien à ajouter. Vérifier seulement que `proxy.conf` ne réécrit pas l'en-tête `Location`.
 
 ### Règle Authelia (facultative)
 
@@ -427,6 +532,101 @@ access_control:
       policy: 'deny'
     - domain: ['valldoy.com', '*.valldoy.com']
       policy: 'two_factor'
+```
+
+### Client OIDC de l'app mobile (Authelia)
+
+À faire à la main sur le serveur : ce dépôt ne modifie jamais la configuration du stack SSO, il n'en
+fournit que des snippets. Authelia devient fournisseur OIDC pour l'app mobile et accepte un jeton
+Bearer sur l'endpoint `auth-request`. Clés relues dans la documentation d'Authelia 4.39 ; décisions
+et vérifications dans [`docs/app-mobile.md`](docs/app-mobile.md).
+
+> **Attention** : redémarrer Authelia **déconnecte toutes les sessions web du stack** (elles sont en
+> mémoire). Choisir un moment calme. Ne jamais committer les vraies valeurs des secrets : les ranger
+> comme les autres secrets du stack.
+
+Générer les secrets (même version d'image que le stack, 4.39.28 au moment de l'écriture) :
+
+```bash
+docker run --rm authelia/authelia:4.39.28 authelia crypto rand --length 64 --charset alphanumeric
+docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)":/keys authelia/authelia:4.39.28 \
+  authelia crypto pair rsa generate --directory /keys
+```
+
+Ajouts à `configuration.yml`. Le bloc `server.endpoints.authz` existe déjà : y ajouter
+`authn_strategies`. Cet endpoint sert toutes les applications du stack, n'y faire que des ajouts.
+
+```yaml
+server:
+  endpoints:
+    authz:
+      auth-request:
+        implementation: 'AuthRequest'
+        authn_strategies:
+          - name: 'HeaderAuthorization'
+            schemes:
+              - 'Basic'
+              - 'Bearer'   # seul ajout : Basic et CookieSession sont les défauts actuels
+          - name: 'CookieSession'
+
+identity_providers:
+  oidc:
+    hmac_secret: '<chaîne aléatoire de 64 caractères>'
+    jwks:
+      - algorithm: 'RS256'
+        key: |
+          <contenu de private.pem, indenté>
+    lifespans:
+      custom:
+        quizlet-mobile:
+          access_token: '1h'
+          refresh_token: '30d'
+    clients:
+      - client_id: 'quizlet-mobile'
+        client_name: 'Quizlet (mobile)'
+        public: true
+        token_endpoint_auth_method: 'none'
+        authorization_policy: 'two_factor'
+        consent_mode: 'explicit'
+        lifespan: 'quizlet-mobile'
+        redirect_uris:
+          - 'https://quizlet.valldoy.com/api/mobile/callback'
+        audience:
+          - 'https://quizlet.valldoy.com'
+        scopes:
+          - 'authelia.bearer.authz'
+          - 'offline_access'
+        grant_types:
+          - 'authorization_code'
+          - 'refresh_token'
+        response_types:
+          - 'code'
+        response_modes:
+          - 'form_post'
+        require_pkce: true
+        pkce_challenge_method: 'S256'
+        require_pushed_authorization_requests: true
+```
+
+Valider la configuration avec la commande `validate-config` de la documentation du stack, puis
+`docker compose restart authelia` dans `/opt/stack`.
+
+- Client public avec PKCE S256 et PAR obligatoires. Pas de scope `openid` (interdit avec
+  `authelia.bearer.authz`) : l'app connaît l'utilisateur par `GET /api/me`.
+- La `redirect_uri` est **https** : c'est le relais `POST /api/mobile/callback` de l'API, qui renvoie
+  ensuite vers `quizlet://callback` (voir [Authentification mobile](#authentification-mobile-bearer-via-authelia)).
+- Le PAR de l'app envoie `audience=https://quizlet.valldoy.com` **et**
+  `resource=https://quizlet.valldoy.com/api`. Authelia compare l'`audience` à l'URL exacte de la
+  requête : l'`audience` seule ne couvre pas `/api/me`, alors que `resource` (RFC 8707) se compare par
+  hôte et préfixe de chemin.
+- Le refresh token est rotaté, et en rejouer un déjà consommé révoque toute la famille : l'app ne
+  rafraîchit jamais deux fois avec le même jeton.
+
+Vérifier avec un jeton `$AT` (obtention à la main : voir `docs/app-mobile.md`) :
+
+```bash
+curl -si -H "Authorization: Bearer $AT" https://quizlet.valldoy.com/api/me                # 200 + votre nom
+curl -si -H "Authorization: Bearer authelia_at_faux" https://quizlet.valldoy.com/api/me   # 302, jamais 200
 ```
 
 ### Validation
@@ -597,9 +797,15 @@ pnpm test
 
 | Package | Ce qui est testé |
 |---|---|
-| `apps/api` | Middleware d'identité : proxy de confiance ou non, en-têtes forgés, `X-Forwarded-For` ignoré, UTF-8, mode dev. Configuration : refus du mode dev en production, variables obligatoires. Upsert et cache des utilisateurs. Permissions sur les sets (lecture, écriture, suppression, duplication, carte d'un autre set). Génération du quiz (graine déterministe, distracteurs distincts, minimum de cartes). Garde CSRF, en-têtes de sécurité, CORS. **V2** : migration d'une base V1 avec données ; dossiers et tags (CRUD, filtres en ET, pagination, isolation entre utilisateurs, confidentialité sur un set public) ; recherche (titre, description, tags, cartes, jokers échappés) ; import (séparateurs, guillemets, lignes invalides, limites de 2000 cartes et de 1 Mo, sets d'autrui) ; FSRS (note → nouvelle échéance, étapes d'apprentissage, rétention, aller-retour avec la base) ; file du jour (limites quotidiennes, minuit dans le fuseau de l'utilisateur, Paris et New York) ; permissions de la révision ; progression conservée à la modification d'une carte, supprimée avec elle, remise à zéro par la duplication ; paramètres ; seed |
+| `apps/api` | Middleware d'identité : proxy de confiance ou non, en-têtes forgés, `X-Forwarded-For` ignoré, UTF-8, mode dev. Configuration : refus du mode dev en production, variables obligatoires. Upsert et cache des utilisateurs. Permissions sur les sets (lecture, écriture, suppression, duplication, carte d'un autre set). Génération du quiz (graine déterministe, distracteurs distincts, minimum de cartes). Garde CSRF, en-têtes de sécurité, CORS. **V2** : migration d'une base V1 avec données ; dossiers et tags (CRUD, filtres en ET, pagination, isolation entre utilisateurs, confidentialité sur un set public) ; recherche (titre, description, tags, cartes, jokers échappés) ; import (séparateurs, guillemets, lignes invalides, limites de 2000 cartes et de 1 Mo, sets d'autrui) ; FSRS (note → nouvelle échéance, étapes d'apprentissage, rétention, aller-retour avec la base) ; file du jour (limites quotidiennes, minuit dans le fuseau de l'utilisateur, Paris et New York) ; permissions de la révision ; progression conservée à la modification d'une carte, supprimée avec elle, remise à zéro par la duplication ; paramètres ; seed. **App mobile** : notes datées `reviewedAt` (bornes de 5 minutes et 30 jours, note passée appliquée à son heure, rejeu identique idempotent, deux notes dans l'ordre et en désordre, quota du jour décompté à l'heure de la note, set privé d'autrui en 404 ; note du web juste après une note mobile datée dans 2 minutes, y compris à cheval sur minuit UTC où `ts-fsrs` lèverait) ; relais `POST /api/mobile/callback` (302 exact, encodage, erreurs relayées, `invalid_request`, champs hors liste ignorés, autre origine ou autre chemin en 403, sans identité en 401, pair non fiable en 403, GET en 404) ; exceptions CSRF par chemin |
 | `apps/web` | Logique pure : session de flashcards (progression, marquage, mélange), score du quiz, formulaire d'édition, client HTTP (session expirée), raccourcis clavier, filtres de la bibliothèque, comparaison tolérante et session du mode écrit, séance de révision et format des intervalles. Tests de rendu (jsdom) des parcours : bibliothèque (dossiers, tags, pagination, déplacement), création et édition (tags), page d'un set, flashcards, quiz, recherche Ctrl+K, import, mode écrit, révision, paramètres, aide `?` |
-| `packages/shared` | Mélange de Fisher-Yates, générateur pseudo-aléatoire, schémas Zod (dont paramètres et notes), normalisation des réponses, parsing de l'import et détection des séparateurs |
+| `packages/shared` | Mélange de Fisher-Yates, générateur pseudo-aléatoire, schémas Zod (dont paramètres et notes, avec `reviewedAt` : UTC avec le « Z » seulement), normalisation des réponses, parsing de l'import et détection des séparateurs |
+
+Les tests du relais et des exceptions CSRF appellent `app.request` directement : l'aide
+`createTestClient().request` ajoute `sec-fetch-site: same-origin` à tout POST, ce qui ferait réussir
+ces tests sans jamais exercer la garde. Ce qui ne se teste pas ici : les en-têtes réels du
+`form_post` d'Authelia (`Origin`, `Sec-Fetch-Site`) et le 302 vers `quizlet://` dans un Custom Tab
+Android, à vérifier sur appareil ([`docs/app-mobile.md`](docs/app-mobile.md)).
 
 Le script de sauvegarde (`docker/backup/backup.sh`) a été testé à la main contre la base de dev :
 sauvegarde, vérification, restauration (confirmée, annulée, archive corrompue, sauvegarde V1 puis
@@ -619,3 +825,15 @@ healthcheck, avec les mêmes restrictions qu'en production.
 - **« Session expirée » en boucle** : vérifier la session Authelia sur `auth.valldoy.com`. Une
   boucle de redirection peut aussi venir d'un `$scheme` au lieu de `$real_scheme` dans les snippets
   du stack (§12 de la documentation du stack).
+- **`403 CSRF_REJECTED` sur `POST /api/mobile/callback`** (la connexion mobile reste bloquée sur un
+  message JSON dans le Custom Tab) : d'abord, vérifier que l'**API déployée** contient le relais et
+  son exception (la garde CSRF passe avant le routage : une ancienne API répond le même message).
+  Sinon, l'`Origin` du POST d'Authelia n'est ni celle de `AUTH_LOGOUT_URL` ni `null` (ces deux
+  valeurs sont acceptées sur ce chemin seulement). Vérifier que cette variable pointe bien sur le
+  portail d'où part le formulaire, et lire l'`Origin` de la requête dans les DevTools (onglet
+  Network, « Preserve log »).
+- **Après la connexion mobile, un 302 avec un `Location` vide** (et
+  `www-authenticate: Bearer error="invalid_token"`) : le jeton est valide mais refusé, presque
+  toujours à cause de l'audience. Le PAR doit envoyer `audience=https://quizlet.valldoy.com` **et**
+  `resource=https://quizlet.valldoy.com/api` ; le journal d'Authelia (`docker compose logs authelia`)
+  dit alors « the granted audience and resource does not match the request ».

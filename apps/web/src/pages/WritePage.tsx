@@ -1,3 +1,17 @@
+import {
+  buildWriteQuestions,
+  errorMessage,
+  initWrite,
+  isWriteCorrect,
+  pluralize,
+  verdict,
+  type WriteDirection,
+  type WriteOptions,
+  type WriteQuestion,
+  type WriteState,
+  writeReducer,
+  writeScoreOf,
+} from '@quizlet/shared'
 import { ChevronLeftIcon, PenLineIcon, RotateCcwIcon, Settings2Icon } from 'lucide-react'
 import { type FormEvent, useEffect, useReducer, useRef, useState } from 'react'
 import { Link } from 'react-router'
@@ -10,21 +24,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { pageTitle } from '@/config'
-import { pluralize } from '@/lib/format'
-import { errorMessage } from '@/lib/http'
 import { type SetDetail, useDueCardIds } from '@/lib/queries'
-import { verdict } from '@/lib/quiz'
-import {
-  buildQuestions,
-  initWrite,
-  isCorrect,
-  scoreOf,
-  type WriteDirection,
-  type WriteOptions,
-  type WriteQuestion,
-  type WriteState,
-  writeReducer,
-} from '@/lib/write'
 import { SetQueryStates, useSetFromRoute } from '@/pages/SetPage'
 
 export function WritePage() {
@@ -66,7 +66,7 @@ function WriteMode({ set }: { set: SetDetail }) {
   function start() {
     setSession((previous) => ({
       round: (previous?.round ?? 0) + 1,
-      questions: buildQuestions(pool, options),
+      questions: buildWriteQuestions(pool, options),
     }))
   }
 
@@ -229,7 +229,7 @@ function WriteSession({
               : `Question ${state.index + 1} sur ${state.questions.length}`}
           </span>
           <span>
-            Bonnes réponses : {state.answers.filter(isCorrect).length} / {state.answers.length}
+            Bonnes réponses : {state.answers.filter(isWriteCorrect).length} / {state.answers.length}
           </span>
         </div>
         <Progress
@@ -348,7 +348,7 @@ function WriteResult({
   onChangeOptions: () => void
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
-  const { correct, total, mistakes } = scoreOf(state)
+  const { correct, total, mistakes } = writeScoreOf(state)
   const percent = total === 0 ? 0 : Math.round((correct / total) * 100)
 
   useEffect(() => {

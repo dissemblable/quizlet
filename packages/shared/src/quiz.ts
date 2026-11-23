@@ -1,6 +1,8 @@
 /** Forme canonique d'une réponse : casse et espaces ignorés (« Paris », « paris  » → identiques). */
 export function normalizeAnswer(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr-FR')
+  // `toLowerCase` et non `toLocaleLowerCase('fr-FR')` : même résultat (Unicode n'a pas de règle de
+  // casse propre au français) et aucune dépendance aux données de locale de Hermes (mobile).
+  return text.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 /**

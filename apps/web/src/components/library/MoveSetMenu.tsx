@@ -1,3 +1,4 @@
+import { errorMessage } from '@quizlet/shared'
 import { FolderInputIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { errorMessage } from '@/lib/http'
 import { type SetSummary, useFolders, useMoveSet } from '@/lib/queries'
 
 /** Menu « Déplacer vers… » d'une carte de la bibliothèque. */

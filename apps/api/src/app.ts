@@ -11,6 +11,7 @@ import { type ClientIpResolver, identity } from './middleware/identity'
 import { createTrustedProxyMatcher, type TrustedProxyMatcher } from './middleware/trusted-proxies'
 import { foldersRoutes } from './routes/folders'
 import { meRoutes } from './routes/me'
+import { mobileRoutes } from './routes/mobile'
 import { reviewRoutes } from './routes/review'
 import { setsRoutes } from './routes/sets'
 import { settingsRoutes } from './routes/settings'
@@ -58,11 +59,22 @@ export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps
     }),
   )
 
+  // Seule exception CSRF : le portail Authelia poste le code OAuth du mobile sur le relais.
+  // Son origine n'est acceptée que sur ce chemin, jamais dans `appOrigins` ni `corsOrigins`.
+  // `'null'` : le formulaire auto-soumis d'Authelia envoie `Origin: null` quand la page porte
+  // `Referrer-Policy: no-referrer`. Sans danger ici : le relais n'a aucun effet de bord (il
+  // redirige vers `quizlet://`, l'app rejette un `state` inconnu) et exige une identité.
+  // Sans portail configuré (dev), aucune exception.
+  const portalOrigin = config.logoutUrl ? new URL(config.logoutUrl).origin : null
+  const csrfExceptions: Record<string, string[]> = portalOrigin
+    ? { '/api/mobile/callback': [portalOrigin, 'null'] }
+    : {}
+
   return (
     app
       // Avant `identity` : le healthcheck Docker n'a pas d'en-têtes d'authentification.
       .get('/health', (c) => c.json({ status: 'ok' }))
-      .use(csrfGuard([...config.appOrigins, ...config.corsOrigins]))
+      .use(csrfGuard([...config.appOrigins, ...config.corsOrigins], csrfExceptions))
       .use(
         identity({
           devIdentity: config.devIdentity,
@@ -77,6 +89,7 @@ export function createApp({ db, config, trustedProxies, clientIp, now }: AppDeps
       .route('/tags', tagsRoutes(db))
       .route('/review', reviewRoutes(db, now ?? (() => new Date())))
       .route('/settings', settingsRoutes(db))
+      .route('/mobile', mobileRoutes())
   )
 }
 

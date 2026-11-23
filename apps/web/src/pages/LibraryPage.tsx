@@ -1,4 +1,10 @@
-import { LIMITS } from '@quizlet/shared'
+import {
+  type LibraryFilters as Filters,
+  LIMITS,
+  libraryParams,
+  pluralize,
+  readLibraryFilters,
+} from '@quizlet/shared'
 import { FolderOpenIcon, LibraryIcon, PlusIcon, SearchIcon, SearchXIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
@@ -10,10 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { pageTitle } from '@/config'
-import { pluralize } from '@/lib/format'
 import { useDebouncedValue } from '@/lib/hooks'
-import { libraryParams, readLibraryFilters } from '@/lib/library'
-import { type LibraryFilters as Filters, useSets } from '@/lib/queries'
+import { useSets } from '@/lib/queries'
 
 export function LibraryPage() {
   const [searchParams, setSearchParams] = useSearchParams()

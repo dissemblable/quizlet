@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+
+import { CLAUDE_PROMPT } from '@quizlet/shared'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { CLAUDE_PROMPT } from '@/lib/prompt'
 import { router } from '@/router'
 import { demoMe, installDomStubs, mockApi, renderApp, sentBody } from '@/test/dom'
 import { makeSet } from '@/test/fixtures'

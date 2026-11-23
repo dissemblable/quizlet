@@ -29,8 +29,8 @@ export function reviewRoutes(db: Db, now: () => Date) {
       validate('json', gradeSchema),
       async (c) => {
         const { cardId } = c.req.valid('param')
-        const { rating } = c.req.valid('json')
-        return c.json(await gradeCard(db, c.get('user'), cardId, rating, now()))
+        const { rating, reviewedAt } = c.req.valid('json')
+        return c.json(await gradeCard(db, c.get('user'), cardId, rating, now(), reviewedAt))
       },
     )
 }

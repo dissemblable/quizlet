@@ -1,6 +1,6 @@
+import { formatDate, pluralize } from '@quizlet/shared'
 import { Link } from 'react-router'
 import { MoveSetMenu } from '@/components/library/MoveSetMenu'
-import { formatDate, pluralize } from '@/lib/format'
 import type { SetSummary } from '@/lib/queries'
 import { VisibilityBadge } from './VisibilityBadge'
 

@@ -1,5 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { LIMITS } from '@quizlet/shared'
+import {
+  countFilledCards,
+  emptyCard,
+  errorMessage,
+  LIMITS,
+  newSetFormValues,
+  pluralize,
+  type SetFormOutput,
+  type SetFormValues,
+  setFormSchema,
+  setToFormValues,
+  toSetInput,
+} from '@quizlet/shared'
 import { GlobeIcon, Loader2Icon, LockIcon, PlusIcon, UploadIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
@@ -25,19 +37,7 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { pageTitle } from '@/config'
-import { pluralize } from '@/lib/format'
-import { errorMessage } from '@/lib/http'
 import { type SetDetail, useCreateSet, useTags, useUpdateSet } from '@/lib/queries'
-import {
-  countFilledCards,
-  emptyCard,
-  newSetFormValues,
-  type SetFormOutput,
-  type SetFormValues,
-  setFormSchema,
-  setToFormValues,
-  toSetInput,
-} from '@/lib/set-form'
 import { SetQueryStates, useSetFromRoute } from '@/pages/SetPage'
 
 export function NewSetPage() {

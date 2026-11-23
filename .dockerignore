@@ -21,3 +21,6 @@ sso-*.md
 # Sauvegardes de la base : jamais dans une image.
 backups
 **/*.dump
+
+# App mobile : hors des images (l'API et le front n'en ont pas besoin).
+apps/mobile

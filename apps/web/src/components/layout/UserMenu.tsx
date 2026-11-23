@@ -1,3 +1,4 @@
+import { initials } from '@quizlet/shared'
 import { LogOutIcon, SettingsIcon } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
-import { initials } from '@/lib/format'
 import { useMe } from '@/lib/queries'
 
 export function UserMenu() {

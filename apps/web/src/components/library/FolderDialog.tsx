@@ -1,4 +1,4 @@
-import { LIMITS } from '@quizlet/shared'
+import { errorMessage, LIMITS } from '@quizlet/shared'
 import { Loader2Icon } from 'lucide-react'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dialog'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { errorMessage } from '@/lib/http'
 import { useCreateFolder, useRenameFolder } from '@/lib/queries'
 
 /** Création d'un dossier, ou renommage de `folder`. */

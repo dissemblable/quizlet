@@ -7,9 +7,12 @@ Mémo pour les futures sessions sur ce dépôt. L'interface et la documentation 
 - Monorepo pnpm + Turborepo :
   - `apps/api` : Hono sur Node ;
   - `apps/web` : Vite + React ;
-  - `packages/shared` : schémas Zod et utilitaires.
-- Le front importe `type AppType` depuis `@quizlet/api` (`exports.types` → `apps/api/src/app.ts`)
-  et appelle l'API avec `hc<AppType>`. Les types ne sont jamais dupliqués à la main.
+  - `apps/mobile` : app Android Expo (voir « App mobile ») ;
+  - `packages/shared` : schémas Zod, utilitaires et logique pure commune au web et au mobile
+    (reducers flashcards, quiz, révision et mode écrit, formulaire de set, formats, erreurs client).
+- Le front et le mobile importent `type AppType` depuis `@quizlet/api` (`exports.types` →
+  `apps/api/src/app.ts`) et appellent l'API avec `hc<AppType>`. Les types ne sont jamais dupliqués
+  à la main.
 - `@quizlet/shared` est consommé en source TS. tsdown l'inclut dans le bundle de l'API pour la prod
   (bundle complet, image sans `node_modules`).
 
@@ -17,7 +20,8 @@ Mémo pour les futures sessions sur ce dépôt. L'interface et la documentation 
 
 - TypeScript strict avec `noUncheckedIndexedAccess`. Biome interdit `any`.
 - **Pas d'alias de chemins dans `apps/api`** (imports relatifs uniquement) : le front type-checke les
-  sources de l'API via `AppType`. Le front, lui, utilise l'alias `@/` → `apps/web/src`.
+  sources de l'API via `AppType`. Le front, lui, utilise l'alias `@/` → `apps/web/src`, le mobile
+  `@/` → `apps/mobile/src`. `packages/shared` : imports relatifs, aucun module Node ni DOM.
 - Style Biome : apostrophes simples, pas de point-virgule, virgules finales, 100 colonnes.
   Lancer `pnpm format` avant de committer.
 - Commits en français, style conventionnel (`feat(scope): …`, `chore: …`).
@@ -34,6 +38,7 @@ pnpm install
 pnpm db:migrate && pnpm db:seed
 pnpm dev                       # front :5180 + API :3000
 pnpm typecheck && pnpm lint && pnpm test   # à lancer avant chaque commit
+pnpm --filter @quizlet/mobile start        # Metro pour le dev-client Android (voir « App mobile »)
 pnpm build
 pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker, ./backups
 ```
@@ -69,28 +74,34 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
 - **Import** : parseur `packages/shared/src/import.ts` (sans Zod) commun au front (aperçu) et à
   l'API, qui reparse toujours le texte brut. `LIMITS.cards` = 2000 (par set et par import),
   `IMPORT_MAX_BYTES` = 1 000 000 (sous la limite de 1 Mio des requêtes). Le prompt à copier dans
-  Claude (`apps/web/src/lib/prompt.ts`, affiché par `ClaudePrompt` dans la page d'import) demande
+  Claude (`packages/shared/src/prompt.ts`, affiché par `ClaudePrompt` dans la page d'import) demande
   `terme ; définition` : il doit rester compatible avec `detectSeparators` / `parseCards` (aucune
   tabulation) et suivre `LIMITS`.
 - **FSRS** : `ts-fsrs` uniquement côté API (`domain/scheduler.ts`). Il modifie `Date.prototype` :
   ne jamais l'importer dans le front ; les échéances prévues sont calculées par l'API. Bornes du
   jour : `dayBounds` (Postgres, fuseau de l'utilisateur). Horloge injectable :
   `createApp({ now })`, `createTestClient(db, {}, { now })`. `replaceCards` modifie les cartes sur
-  place (upsert) : un delete/insert effacerait leur progression par cascade.
+  place (upsert) : un delete/insert effacerait leur progression par cascade. `POST
+  /review/cards/:cardId` accepte un `reviewedAt` facultatif (mobile hors ligne) : la garde « pas
+  postérieure à `last_review` » ne s'applique que s'il est fourni (le web n'est jamais ignoré) ;
+  réponse `{ state, due, requeue, card, ignored }`. `ts-fsrs` lève sur un temps écoulé négatif :
+  `max(now, lastReview)` (`notBefore`, `domain/grading.ts`).
 - **Sauvegardes** : `docker/backup/backup.sh` (POSIX sh de busybox, testé à la main), service
   `quizlet-backup`. Restauration = suppression des schémas `public` et `drizzle` puis rechargement,
   en une transaction.
 
 ## Front
 
-- Appels d'API : `api` (`src/lib/api.ts`) + `unwrap()` (`src/lib/http.ts`), qui lève une `ApiError`
-  avec un message français. Clés et hooks TanStack Query dans `src/lib/queries.ts`.
+- Appels d'API : `api` (`src/lib/api.ts`) + `unwrap()` (`@quizlet/shared`, `client-errors.ts`), qui
+  lève une `ApiError` avec un message français. Clés et hooks TanStack Query dans
+  `src/lib/queries.ts`.
 - `apiFetch` utilise `redirect: 'manual'` : une session Authelia expirée (302) devient
   `SESSION_EXPIRED` → bannière « Se reconnecter » (`src/lib/session.ts`).
 - Thème : `src/lib/theme.tsx` + `public/theme-init.js` (script externe, compatible CSP).
   Ne pas réintroduire `next-themes` ni de script inline.
-- Logique pure dans `src/lib/*.ts`, testée avec Vitest (environnement node). Titres de page avec
-  `<title>{pageTitle('…')}</title>` (React 19).
+- Logique pure commune au web et au mobile dans `packages/shared/src` (reducers, formulaire de set,
+  formats sans `Intl`…), propre au web dans `src/lib/*.ts` ; testée avec Vitest (environnement
+  node). Titres de page avec `<title>{pageTitle('…')}</title>` (React 19).
 - Tests de rendu : en-tête `// @vitest-environment jsdom`, puis `installDomStubs()`, `mockApi()`
   et `renderApp(path)` (`src/test/dom.tsx`), avec les fixtures de `src/test/fixtures.ts`.
 - Routes dans `src/router.tsx`. Les pages hors bibliothèque sont en `lazy` ; ne pas importer
@@ -108,7 +119,8 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
   (`staleTime: Infinity`, `gcTime: 0`).
 - Raccourcis : `useShortcuts` (ignorés pendant une saisie et dans un dialogue ou un menu). Tout
   nouveau raccourci va aussi dans l'aide `?` (`components/layout/ShortcutsDialog.tsx`).
-- Filtres de la bibliothèque (dossier, tags, page, recherche) dans l'URL : `lib/library.ts`.
+- Filtres de la bibliothèque (dossier, tags, page, recherche) dans l'URL : `readLibraryFilters` /
+  `libraryParams` (`packages/shared/src/library.ts`).
 
 ## Règles de sécurité (SSO)
 
@@ -127,7 +139,10 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
 - Le mode `DEV_AUTH_*` doit rester impossible en production : `NODE_ENV` vaut `production` par
   défaut, `parseConfig` refuse `DEV_AUTH_*` dans ce cas, et le Dockerfile fige `NODE_ENV=production`.
 - La garde CSRF (`src/middleware/csrf.ts`) est indispensable : le cookie Authelia est partagé par
-  tous les sous-domaines. CORS est fermé par défaut.
+  tous les sous-domaines. CORS est fermé par défaut. Seule exception : `POST
+  /api/mobile/callback` (relais `form_post` d'Authelia vers `quizlet://callback`) accepte l'origine
+  du portail, déduite de `AUTH_LOGOUT_URL`, ainsi que `Origin: null` (portail en
+  `Referrer-Policy: no-referrer`) ; jamais dans `appOrigins` ni `corsOrigins`.
 - Production : aucune section `ports:` dans `docker-compose.prod.yml`. L'API n'est joignable que
   via le réseau Docker `web` (par nginx) ; Postgres seulement via un réseau `internal`.
 - Ne jamais modifier la configuration du stack SSO (Authelia, nginx, cloudflared) depuis ce dépôt :
@@ -146,10 +161,36 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
 - `apps/web/nginx.conf` : les en-têtes de sécurité sont au niveau `server`. Ne pas ajouter de
   `add_header` dans une `location` (cela annulerait leur héritage) : utiliser `expires`.
 
-## App mobile (en conception)
+## App mobile
 
-- Décisions, options écartées et points à vérifier : `docs/app-mobile.md`. À lire avant tout
-  travail sur l'authentification mobile ou sur `apps/mobile`.
+- Android seul, Expo SDK 58 (Hermes), Expo Router (4 onglets), dev-client (pas Expo Go). Décisions,
+  conception de l'authentification, du hors-ligne et des rappels, checklist appareil :
+  `docs/app-mobile.md` (à lire avant tout travail sur `apps/mobile`).
+- Config : `apps/mobile/.env` (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_AUTH_URL`,
+  `EXPO_PUBLIC_OIDC_CLIENT_ID`, gabarit `.env.example`, jamais de vraies valeurs dans git).
+- **Logique pure** : tout ce qui est testable vit dans des modules `.ts` purs (Vitest, environnement
+  node, pas de jest-expo). Règle vérifiée par `src/architecture.test.ts` : les `.ts` de
+  `src/{auth,offline,notifications,lib}` n'importent ni `react`, ni `react-native`, ni `expo*`
+  (sauf `*.tsx`, `use-*.ts`, `*-adapter(s).ts`, `adapters.ts`, `queries.ts`, `api.ts`, `device.ts`,
+  `hooks.ts`), et tout fichier importé, même indirectement, par un `*.test.ts` doit être pur : les
+  tests importent le fichier précis, jamais un barrel (`@/ui`, `@/auth`, `@/offline`…).
+- `tsconfig` : `verbatimModuleSyntax` (utiliser `import type`, sinon Metro casse), pas de
+  `typedRoutes` (constructeurs dans `src/lib/routes.ts`). Titres dynamiques d'écran avec
+  `<Stack.Screen options={{ title }} />`.
+- Pas d'API non vérifiée sur Hermes dans la logique : pas de `TextDecoder` fatal (voir
+  `lib/utf8.ts`), pas d'`Intl` (utiliser `formatDate`, `formatNumber`, `pluralize` de
+  `@quizlet/shared`), pas d'ES2023+ (`toSorted`, `Object.groupBy`). L'écran Diagnostics (dev-client)
+  vérifie le runtime.
+- Auth : OIDC Authelia + Bearer (`src/auth`), jetons uniquement dans `expo-secure-store`, refresh
+  sérialisé (un rejeu révoquerait toute la famille). Hors ligne (`src/offline`) : cache persistant
+  (fichier), notes de révision en mutations à `scope` unique `review-grade`, rejouées dans l'ordre ;
+  toute écriture serveur passe par `useOnlineGuard()` sauf la note (`useGrade`).
+- `@tanstack/query-core` n'est pas résolvable depuis `apps/mobile` : importer depuis
+  `@tanstack/react-query`. Les paquets de persistance TanStack sont épinglés à la version exacte de
+  `@tanstack/react-query` (deux versions de `query-core` casseraient `onlineManager`) : les relever
+  ensemble et relancer `pnpm why @tanstack/query-core -r`.
+- Build natif local : JDK 17 + Android SDK, `npx expo prebuild --platform android` puis
+  `npx expo run:android` depuis `apps/mobile` (`android/` est ignoré par git).
 
 ## graphify
 

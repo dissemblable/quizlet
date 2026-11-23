@@ -6,6 +6,12 @@ describe('normalizeAnswer', () => {
     expect(normalizeAnswer('  Paris   (France) ')).toBe('paris (france)')
     expect(normalizeAnswer('ÉTÉ')).toBe('été')
   })
+
+  it('met en minuscules comme toLocaleLowerCase fr-FR (aucune règle propre au français)', () => {
+    for (const text of ['ÉTÉ', 'ŒUVRE', 'İSTANBUL', 'ΟΔΥΣΣΕΥΣ', 'ǅ', 'ẞ', 'ÇA VA']) {
+      expect(normalizeAnswer(text)).toBe(text.toLocaleLowerCase('fr-FR'))
+    }
+  })
 })
 
 describe('countDistinctDefinitions', () => {
