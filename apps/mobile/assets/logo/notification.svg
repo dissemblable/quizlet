@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="205 195 620 620">
+  <title>Quizlet</title>
+  <defs>
+    <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="320" y="377" width="440" height="330" rx="52" fill="#000" stroke="#000" stroke-width="56"/>
+    </mask>
+    <mask id="lines" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M392 497H640M392 585H540" stroke="#000" stroke-width="40" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#gap)">
+    <rect x="292" y="347" width="440" height="330" rx="52" transform="translate(-28 -36) rotate(-10 512 512)" fill="#fff"/>
+  </g>
+  <g mask="url(#lines)">
+    <rect x="320" y="377" width="440" height="330" rx="52" fill="#fff"/>
+  </g>
+</svg>
