@@ -826,11 +826,12 @@ healthcheck, avec les mêmes restrictions qu'en production.
   boucle de redirection peut aussi venir d'un `$scheme` au lieu de `$real_scheme` dans les snippets
   du stack (§12 de la documentation du stack).
 - **`403 CSRF_REJECTED` sur `POST /api/mobile/callback`** (la connexion mobile reste bloquée sur un
-  message JSON dans le Custom Tab) : l'`Origin` du POST d'Authelia n'est pas celle de
-  `AUTH_LOGOUT_URL`. Vérifier que cette variable pointe bien sur le portail d'où part le formulaire,
-  et lire l'`Origin` de la requête dans les DevTools (onglet Network, « Preserve log »). Une valeur
-  `null` (portail en `Referrer-Policy: no-referrer`) demande d'ajouter la chaîne `'null'` à la
-  liste de l'exception, dans `app.ts`, pour ce chemin seulement.
+  message JSON dans le Custom Tab) : d'abord, vérifier que l'**API déployée** contient le relais et
+  son exception (la garde CSRF passe avant le routage : une ancienne API répond le même message).
+  Sinon, l'`Origin` du POST d'Authelia n'est ni celle de `AUTH_LOGOUT_URL` ni `null` (ces deux
+  valeurs sont acceptées sur ce chemin seulement). Vérifier que cette variable pointe bien sur le
+  portail d'où part le formulaire, et lire l'`Origin` de la requête dans les DevTools (onglet
+  Network, « Preserve log »).
 - **Après la connexion mobile, un 302 avec un `Location` vide** (et
   `www-authenticate: Bearer error="invalid_token"`) : le jeton est valide mais refusé, presque
   toujours à cause de l'audience. Le PAR doit envoyer `audience=https://quizlet.valldoy.com` **et**

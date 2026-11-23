@@ -141,8 +141,8 @@ pnpm db:backup | pnpm db:verify <fichier> | pnpm db:restore <fichier>   # Docker
 - La garde CSRF (`src/middleware/csrf.ts`) est indispensable : le cookie Authelia est partagé par
   tous les sous-domaines. CORS est fermé par défaut. Seule exception : `POST
   /api/mobile/callback` (relais `form_post` d'Authelia vers `quizlet://callback`) accepte l'origine
-  du portail, déduite de `AUTH_LOGOUT_URL` ; jamais dans `appOrigins` ni `corsOrigins`. Si Authelia
-  envoie `Origin: null`, ajouter `'null'` à la liste de cette exception dans `app.ts`.
+  du portail, déduite de `AUTH_LOGOUT_URL`, ainsi que `Origin: null` (portail en
+  `Referrer-Policy: no-referrer`) ; jamais dans `appOrigins` ni `corsOrigins`.
 - Production : aucune section `ports:` dans `docker-compose.prod.yml`. L'API n'est joignable que
   via le réseau Docker `web` (par nginx) ; Postgres seulement via un réseau `internal`.
 - Ne jamais modifier la configuration du stack SSO (Authelia, nginx, cloudflared) depuis ce dépôt :

@@ -152,7 +152,6 @@ describe('relais mobile (POST /api/mobile/callback)', () => {
       { origin: 'https://evil.example' },
       { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
       { origin: 'https://quizlet.example.test' },
-      { origin: 'null' },
     ]
     for (const headers of rejected) {
       const res = await postForm({ code: 'c', state: 's' }, { headers })
@@ -173,6 +172,14 @@ describe('relais mobile (POST /api/mobile/callback)', () => {
       expect(res.status, path).toBe(403)
       expect(await res.json(), path).toMatchObject({ error: { code: 'CSRF_REJECTED' } })
     }
+  })
+
+  it('accepte Origin: null (portail avec Referrer-Policy: no-referrer) sur le relais seulement', async () => {
+    const headers = { origin: 'null' }
+    const res = await postForm({ code: 'c', state: 's' }, { headers })
+    expect(res.status).toBe(302)
+    const other = await postForm({ code: 'c', state: 's' }, { path: '/api/sets', headers })
+    expect(other.status).toBe(403)
   })
 
   it('n’accorde aucune exception sans portail configuré (AUTH_LOGOUT_URL absente)', async () => {

@@ -395,8 +395,9 @@ Prérequis : API déployée avec le relais et l'exception CSRF ; JDK 17 et Andro
 Metro lancé (`pnpm --filter @quizlet/mobile start`, `adb reverse tcp:8081 tcp:8081` si besoin).
 
 - **Avant tout** : ouvrir DevTools sur le `form_post` d'Authelia (étape 4 de « Obtenir un jeton à
-  la main ») et relever `Origin`, `Sec-Fetch-Site` et `Referrer-Policy`. Si `Origin: null`, ajouter
-  `'null'` à l'exception CSRF dans `apps/api/src/app.ts`.
+  la main ») et relever `Origin`, `Sec-Fetch-Site` et `Referrer-Policy`. L'exception CSRF accepte
+  l'origine du portail et `Origin: null` sur le relais seulement (`apps/api/src/app.ts`) ; si le
+  portail envoie autre chose, l'ajouter à cette liste.
 - **Auth** : le 302 vers `quizlet://callback` dans le Custom Tab (plan B si Chrome le refuse : page
   200 avec `<meta http-equiv="refresh">` et lien visible) ; succès, annulation, fermeture manuelle
   du Custom Tab, app tuée pendant le Custom Tab (reprise à froid), déconnexion puis reconnexion,
